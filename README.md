@@ -5,7 +5,7 @@ Simulation of a two wheeled self balancing robot, this time using [MuJoCo](https
 
 After implementing the same simulation using PyBullet (see [here](https://github.com/lachlanhurst/balance-robot-pybullet-sim)), I found that PyBullet support for [Stable-Baselines3](https://stable-baselines3.readthedocs.io/) / [Gymnasium](https://gymnasium.farama.org/index.html) was a little lacking. It made sense to switch to MuJoCo given how early on this project is.
 
-![Self balancing robot simulation video](./docs/mujoco_sim.gif)
+![Self balancing robot simulation video](lachlanhurst/docs/mujoco_sim.gif)
 
 
 ## Setting up the development environment
@@ -23,7 +23,7 @@ It's recommended to use the conda environment file included in this repository; 
 
 ## Calculating LQR parameters
 
-The LQR parameters are already [included in the source code](./src/simulation/robot_lqr.py). There is no need to re-calculate these parameters unless the physical characteristics of the robot change (as defined in [`robot-02.xml`](./src/simulation/robot-02.xml)).
+The LQR parameters are already [included in the source code](lachlanhurst/src/simulation/robot_lqr.py). There is no need to re-calculate these parameters unless the physical characteristics of the robot change (as defined in [`robot-02.xml`](lachlanhurst/src/simulation/robot-02.xml)).
 
 If you do need to re-calculate these parameters follow the process defined in the [PyBullet simulation repo](https://github.com/lachlanhurst/balance-robot-pybullet-sim).
 
