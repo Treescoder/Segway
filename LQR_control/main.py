@@ -4,6 +4,7 @@ import math
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation
+from robot_lqr import RobotLqr
 
 def main():
     model = mujoco.MjModel.from_xml_path(r"xml\scene.xml")
@@ -16,8 +17,6 @@ def main():
     next_ctrl_time = 0.0
 
     # ================== ID 获取 ==================
-    motor_l_wheel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_l_wheel")
-    motor_r_wheel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_r_wheel")
     robot_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot_body")
 
     # ================== 仿真参数 ==================
@@ -33,9 +32,11 @@ def main():
     log_lwheel_vel = []
     log_rwheel_vel = []
 
-    # PD 控制增益
-    Kp = 10.0   # P 增益
-    Kd = 10.0    # D 增益
+    # ================== 初始化 LQR ==================
+    robot = RobotLqr(model, data)
+
+    # 可选：设置目标速度（0 = 原地平衡）
+    robot.set_velocity_linear_set_point(0.1)
 
     # ================== 打开 MuJoCo 被动可视化窗口 ==================
     with mujoco.viewer.launch_passive(model, data) as viewer:
@@ -50,29 +51,20 @@ def main():
                 break
 
             if data.time >= next_ctrl_time:
-                # ------------------ 获取姿态 ------------------
+                # ================== LQR 控制 ==================
+                robot.update_motor_speed()
+
+                # ================== 读取状态（用于打印） ==================
                 quat = data.body("robot_body").xquat
-                # 防止四元数为 0
                 if quat[0] == 0:
                     pitch = 0.0
                 else:
                     R = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
-                    pitch = R.as_euler('xyz', degrees=False)[0]  # x 轴为 pitch
+                    pitch = -R.as_euler('xyz', degrees=False)[0]
 
-                pitch_dot = data.joint("robot_body_joint").qvel[0]  # 近似 pitch_dot
+                pitch_dot = data.joint("robot_body_joint").qvel[0]
 
-                # ------------------ PD 控制 ------------------
-                control_signal = - Kp * pitch - Kd * pitch_dot
-
-                # 限制轮子速度
-                control_signal = np.clip(control_signal, -MAX_MOTOR_VEL, MAX_MOTOR_VEL)
-
-                # 将控制信号赋给左右轮子
-                data.ctrl[motor_l_wheel] = control_signal
-                data.ctrl[motor_r_wheel] = -control_signal
-
-                # ------------------ 记录数据 ------------------
-                vel_l = data.joint("torso_l_wheel").qvel[0]
+                vel_l = -data.joint("torso_l_wheel").qvel[0]
                 vel_r = data.joint("torso_r_wheel").qvel[0]
 
                 log_time.append(data.time)
