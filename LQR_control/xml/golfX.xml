@@ -1,0 +1,50 @@
+<mujoco model="simple_cart">
+  <compiler angle="radian" inertiafromgeom="true" />
+
+  <asset>
+    <material name="body_mat" rgba="0.6 0.8 0.2 1" />
+    <material name="wheel_mat" rgba="0.2 0.2 0.2 1" />
+  </asset>
+
+  <worldbody>
+    <body name="robot_body" pos="0 0 0.06">
+      <freejoint name="robot_body_joint" />
+
+      <!-- 底板：薄长方体，连接左右车轮 -->
+      <geom name="base_plate" type="box" size="0.2 0.08 0.015" pos="0 0 0"
+            material="body_mat" />
+
+      <!-- 车把：竖直圆柱 -->
+      <geom name="handlebar" type="cylinder" size="0.02 0.12" pos="0 0 0.1"
+            material="body_mat" />
+
+      <!-- 惯性：总质量约0.8kg，重心略高于底板 -->
+      <inertial pos="0 0 0.03" mass="0.8" diaginertia="0.004 0.004 0.002" />
+
+      <!-- 左轮 -->
+      <body name="l_wheel" pos="-0.22 0 0">
+        <joint name="torso_l_wheel" type="hinge" axis="-1 0 0" damping="0.1" />
+        <geom name="l_wheel_geom" type="cylinder" size="0.06 0.04"
+              pos="0 0 0" quat="0.707107 0 0.707107 0"
+              material="wheel_mat" />
+        <inertial pos="0 0 0" mass="0.1" diaginertia="0.0002 0.0001 0.0001" />
+      </body>
+
+      <!-- 右轮 -->
+      <body name="r_wheel" pos="0.22 0 0">
+        <joint name="torso_r_wheel" type="hinge" axis="1 0 0" damping="0.1" />
+        <geom name="r_wheel_geom" type="cylinder" size="0.06 0.04"
+              pos="0 0 0" quat="0.707107 0 0.707107 0"
+              material="wheel_mat" />
+        <inertial pos="0 0 0" mass="0.1" diaginertia="0.0002 0.0001 0.0001" />
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor name="motor_l_wheel" joint="torso_l_wheel" gear="1"
+           ctrlrange="-8 8" ctrllimited="true" />
+    <motor name="motor_r_wheel" joint="torso_r_wheel" gear="1"
+           ctrlrange="-8 8" ctrllimited="true" />
+  </actuator>
+</mujoco>

@@ -11,7 +11,7 @@ def main():
 
     # 仿真参数
     model.opt.timestep = 0.001
-    ctl_interval = 1                    # 请尝试 50，但建议先保持 1 调好参数
+    ctl_interval = 10                  # 请尝试 50，但建议先保持 1 调好参数
     T_ctl = ctl_interval * model.opt.timestep
     next_ctrl_time = 0.0
     start_time = time.time()
@@ -28,7 +28,7 @@ def main():
     GRAVITY = 9.81
 
     # 控制参数
-    target_vel = 1.5
+    target_vel = 1.0
 
     # 速度环（增量式 PI）
     vel_kp = 0.5
@@ -86,7 +86,7 @@ def main():
                 vel_error_prev = speed_error
                 target_pitch_raw = vel_output
 
-                # 期望倾角变化率限制（可选）
+                # 期望倾角变化率限制
                 delta_pitch = target_pitch_raw - prev_target_pitch
                 max_delta = max_pitch_rate * T_ctl
                 if abs(delta_pitch) > max_delta:
