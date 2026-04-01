@@ -4,7 +4,6 @@ import math
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation
-from robot_lqr import RobotLqr
 
 def main():
     model = mujoco.MjModel.from_xml_path(r"xml\scene.xml")
@@ -17,13 +16,17 @@ def main():
     next_ctrl_time = 0.0
 
     # ================== ID 获取 ==================
+    motor_l_wheel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_l_wheel")
+    motor_r_wheel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_r_wheel")
     robot_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot_body")
 
     # ================== 仿真参数 ==================
     WHEEL_RADIUS = 0.034
-    MAX_MOTOR_VEL = 500.0  # rad/s
+    MAX_TORQUE = 20.0 # Nm
     start_time = time.time()
     SIM_DURATION = 50.0     # 仿真总时长（秒）
+    kp, kd, kv = 200.0, 5.0, 0.3
+    velocity_angular_filtered = pitch_dot_filtered = prev_pitch = 0.0
 
     # ================== 数据记录 ==================
     log_time = []
@@ -32,18 +35,12 @@ def main():
     log_lwheel_vel = []
     log_rwheel_vel = []
 
-    # ================== 初始化 LQR ==================
-    robot = RobotLqr(model, data)
-
-    # 可选：设置目标速度（0 = 原地平衡）
-    robot.set_velocity_linear_set_point(0.1)
-
     # ================== 打开 MuJoCo 被动可视化窗口 ==================
-    with mujoco.viewer.launch_passive(model, data) as viewer:
+    with (mujoco.viewer.launch_passive(model, data) as viewer):
         cam = viewer.cam
-        cam.distance = 1.5
-        cam.elevation = -20
-        cam.azimuth = 45
+        cam.distance = 2.2
+        cam.elevation = -30
+        cam.azimuth = 60
 
         while viewer.is_running():
             sim_time = time.time() - start_time
@@ -51,21 +48,26 @@ def main():
                 break
 
             if data.time >= next_ctrl_time:
-                # ================== LQR 控制 ==================
-                robot.update_motor_speed()
-
                 # ================== 读取状态（用于打印） ==================
                 quat = data.body("robot_body").xquat
-                if quat[0] == 0:
-                    pitch = 0.0
-                else:
-                    R = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
-                    pitch = -R.as_euler('xyz', degrees=False)[0]
+                R = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
+                pitch = R.as_euler('xyz', degrees=False)[0]
+                pitch_dot = (pitch - prev_pitch) / T_ctl
+                prev_pitch = pitch
 
-                pitch_dot = data.joint("robot_body_joint").qvel[0]
+                vel_l = data.joint("torso_l_wheel").qvel[0] * WHEEL_RADIUS # 这个求的是角速度
+                vel_r = data.joint("torso_r_wheel").qvel[0] * WHEEL_RADIUS
+                vel = (vel_l * -1 + vel_r) / 2.0
+                #
+                pitch_dot_filtered = (pitch_dot_filtered * .975) + (pitch_dot * .025)
+                # velocity_angular_filtered = (velocity_angular_filtered * .975) + (vel * .025)
+                # velocity_linear_error = 0.5 - velocity_angular_filtered * WHEEL_RADIUS
 
-                vel_l = -data.joint("torso_l_wheel").qvel[0]
-                vel_r = data.joint("torso_r_wheel").qvel[0]
+                torque = - kp * pitch - kd * pitch_dot_filtered + kv * (0 - vel)
+                torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
+
+                data.ctrl[motor_l_wheel] = torque
+                data.ctrl[motor_r_wheel] = -torque
 
                 log_time.append(data.time)
                 log_pitch.append(pitch)
@@ -79,7 +81,8 @@ def main():
                           f"[pitch={np.degrees(pitch):.2f}] "
                           f"[pitch_dot={np.degrees(pitch_dot):.2f}] "
                           f"[vel_l={vel_l:.2f}] "
-                          f"[vel_r={vel_r:.2f}]")
+                          f"[vel_r={vel_r:.2f}]"
+                          f"[torque={torque:.2f}]")
 
                 next_ctrl_time += T_ctl
 
