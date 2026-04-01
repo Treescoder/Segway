@@ -36,7 +36,7 @@ def main():
     robot = RobotLqr(model, data)
 
     # 可选：设置目标速度（0 = 原地平衡）
-    robot.set_velocity_linear_set_point(0.1)
+    robot.set_velocity_linear_set_point(0.0)
 
     # ================== 打开 MuJoCo 被动可视化窗口 ==================
     with mujoco.viewer.launch_passive(model, data) as viewer:
