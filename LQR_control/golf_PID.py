@@ -25,7 +25,6 @@ def main():
     # 模型参数
     WHEEL_RADIUS = 0.1275
     MAX_TORQUE = 20.0
-    GRAVITY = 9.81
 
     # 控制参数
     target_vel = 1.0
