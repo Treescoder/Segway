@@ -3,6 +3,7 @@ import mujoco.viewer
 import math
 import time
 import numpy as np
+from windows import move_window_to_second_screen
 from scipy.spatial.transform import Rotation
 
 def main():
@@ -19,14 +20,18 @@ def main():
     motor_l_wheel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_l_wheel")
     motor_r_wheel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_r_wheel")
     robot_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot_body")
+    lwheel_joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "torso_l_wheel")
+    lwheel_dof_idx = model.jnt_dofadr[lwheel_joint_id]
+    rwheel_joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "torso_r_wheel")
+    rwheel_dof_idx = model.jnt_dofadr[rwheel_joint_id]
 
     # ================== 仿真参数 ==================
     WHEEL_RADIUS = 0.034
     MAX_TORQUE = 20.0 # Nm
     start_time = time.time()
     SIM_DURATION = 50.0     # 仿真总时长（秒）
-    kp, kd, kv = 200.0, 5.0, 0.3
-    velocity_angular_filtered = pitch_dot_filtered = prev_pitch = 0.0
+    kp, kd, kv = 10.0, 0.01, 1
+    vel_filtered = pitch_dot_filtered = prev_pitch = 0.0
 
     # ================== 数据记录 ==================
     log_time = []
@@ -37,10 +42,11 @@ def main():
 
     # ================== 打开 MuJoCo 被动可视化窗口 ==================
     with (mujoco.viewer.launch_passive(model, data) as viewer):
+        move_window_to_second_screen(10, 20, 1900, 900)
         cam = viewer.cam
         cam.distance = 2.2
         cam.elevation = -30
-        cam.azimuth = 60
+        cam.azimuth = -60
 
         while viewer.is_running():
             sim_time = time.time() - start_time
@@ -54,20 +60,20 @@ def main():
                 pitch = R.as_euler('xyz', degrees=False)[0]
                 pitch_dot = (pitch - prev_pitch) / T_ctl
                 prev_pitch = pitch
+                # pitch_dot = data.qvel[3]
 
-                vel_l = data.joint("torso_l_wheel").qvel[0] * WHEEL_RADIUS # 这个求的是角速度
-                vel_r = data.joint("torso_r_wheel").qvel[0] * WHEEL_RADIUS
+                vel_l = data.qvel[lwheel_dof_idx] * WHEEL_RADIUS # 这个求的是角速度
+                vel_r = data.qvel[rwheel_dof_idx] * WHEEL_RADIUS
                 vel = (vel_l * -1 + vel_r) / 2.0
-                #
-                pitch_dot_filtered = (pitch_dot_filtered * .975) + (pitch_dot * .025)
-                # velocity_angular_filtered = (velocity_angular_filtered * .975) + (vel * .025)
-                # velocity_linear_error = 0.5 - velocity_angular_filtered * WHEEL_RADIUS
 
-                torque = - kp * pitch - kd * pitch_dot_filtered + kv * (0 - vel)
+                pitch_dot_filtered = (pitch_dot_filtered * .9) + (pitch_dot * .1)
+                vel_filtered = (vel_filtered * .975) + (vel * .025)
+
+                torque = - kp * pitch - kd * pitch_dot + kv * (0.0 - vel_filtered)
                 torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
 
                 data.ctrl[motor_l_wheel] = torque
-                data.ctrl[motor_r_wheel] = -torque
+                data.ctrl[motor_r_wheel] = - torque
 
                 log_time.append(data.time)
                 log_pitch.append(pitch)
@@ -78,11 +84,11 @@ def main():
                 # ------------------ 实时打印 ------------------
                 if data.time % 5 < T_ctl:
                     print(f"[t={sim_time:5.2f}s] "
-                          f"[pitch={np.degrees(pitch):.2f}] "
-                          f"[pitch_dot={np.degrees(pitch_dot):.2f}] "
-                          f"[vel_l={vel_l:.2f}] "
-                          f"[vel_r={vel_r:.2f}]"
-                          f"[torque={torque:.2f}]")
+                          f"[pitch={pitch:5.2f}] "
+                          f"[pitch_dot={pitch_dot:5.2f}] "
+                          f"[vel_l={vel_l:5.2f}/vel={vel:5.2f} "
+                          f"[vel_r={vel_r:5.2f}]"
+                          f"[torque={torque:5.2f}]")
 
                 next_ctrl_time += T_ctl
 

@@ -1,4 +1,4 @@
-<mujoco model="scooter scene">
+<mujoco model="segway scene">
   <compiler angle="radian"/>
   <option timestep="0.000025"/>
 
