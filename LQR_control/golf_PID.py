@@ -40,7 +40,6 @@ def main():
     # 角度环（位置式 PD）
     ang_kp = 40
     ang_kd = 3
-    ang_limit = MAX_TORQUE
 
     # 期望倾角变化率限制
     max_pitch_rate = 0.08
