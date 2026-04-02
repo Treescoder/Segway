@@ -11,7 +11,7 @@ def main():
 
     # 仿真参数
     model.opt.timestep = 0.001
-    ctl_interval = 10                  # 请尝试 50，但建议先保持 1 调好参数
+    ctl_interval = 10              # 请尝试 50，但建议先保持 1 调好参数
     T_ctl = ctl_interval * model.opt.timestep
     next_ctrl_time = 0.0
     start_time = time.time()
@@ -26,34 +26,27 @@ def main():
     WHEEL_RADIUS = 0.1275
     MAX_TORQUE = 20.0
 
-    # 控制参数
-    target_vel = 1.5
+
+    target_vel = 1.0  # 目标速度
 
     # 速度环（增量式 PI）
-    vel_kp = 0.25
+    vel_kp = 0.5                        # 0.25
     vel_ki = 0.001
     vel_limit = 0.15                    # 期望倾角限幅（rad）
     vel_error_prev = 0.0
     vel_output = 0.0                    # 上次输出（期望倾角）
 
     # 角度环（位置式 PD）
-    ang_kp = 20
-    ang_kd = 1.5
-
-    # 期望倾角变化率限制
-    max_pitch_rate = 0.08
-    prev_target_pitch = 0.0
-
-    # 状态变量
-    prev_pitch = 0.0
-    pitch_dot_filtered = 0.0
-    alpha = 0.1
+    ang_kp = 50                         # 20
+    ang_kd = 0.01                       # 1.5
+    max_pitch_rate = 0.07  # 期望倾角变化率限制：静止时小一点0.02，运动时大一点0.07
+    prev_pitch = pitch_dot_filtered = prev_target_pitch = 0.0
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
         cam = viewer.cam
-        cam.distance = 2.2
-        cam.elevation = -30
-        cam.azimuth = 60
+        cam.distance = 5.2
+        cam.elevation = -20
+        cam.azimuth = 20
 
         while viewer.is_running():
             sim_time = time.time() - start_time
@@ -73,8 +66,8 @@ def main():
                 vel_l = ang_vel_l * WHEEL_RADIUS
                 vel_r = ang_vel_r * WHEEL_RADIUS
                 linear_vel = (-vel_l + vel_r) / 2.0
+                v_world = -np.dot(data.qvel[:3], R.apply([0, 1, 0]))
 
-                pitch_dot_filtered = alpha * pitch_dot + (1 - alpha) * pitch_dot_filtered
 
                 # ---- 速度环（增量式 PI） ----
                 speed_error = target_vel - linear_vel
@@ -94,7 +87,7 @@ def main():
                 prev_target_pitch = target_pitch
 
                 # ---- 角度环（位置式 PD） ----
-                torque = ang_kp * (pitch - target_pitch) + ang_kd * pitch_dot_filtered
+                torque = ang_kp * (pitch - target_pitch) + ang_kd * pitch_dot
                 torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
 
                 # ---- 执行 ----
@@ -108,14 +101,15 @@ def main():
                           f"pitch_dot={np.degrees(pitch_dot):5.2f}°/s "
                           f"vel_l={vel_l:5.2f} vel_r={vel_r:5.2f} "
                           f"vel={linear_vel:5.2f} m/s "
+                          f"v_world={v_world:5.2f} linear_vel={linear_vel:5.2f} "
                           f"target_pitch={np.degrees(target_pitch):5.2f}° "
                           f"torque={torque:5.2f}")
 
+
                 next_ctrl_time += T_ctl
-                if data.time % 1 < T_ctl:
-                    print(f"pos_x={data.qpos[0]:.3f} m, vel={linear_vel:.2f} m/s")
 
             cam.lookat[:] = data.xpos[robot_body] + 0.03
+
             mujoco.mj_step(model, data)
             viewer.sync()
 
