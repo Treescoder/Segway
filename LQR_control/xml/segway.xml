@@ -56,7 +56,7 @@
 
     <actuator>
         <!-- 添加力矩限幅，避免过激响应 -->
-        <motor name="motor_l_wheel" joint="torso_l_wheel" gear="0.5" ctrlrange="-15 15" ctrllimited="true"/>
-        <motor name="motor_r_wheel" joint="torso_r_wheel" gear="0.5" ctrlrange="-15 15" ctrllimited="true"/>
+        <motor name="motor_l_wheel" joint="torso_l_wheel" gear="1" ctrlrange="-15 15" ctrllimited="true"/>
+        <motor name="motor_r_wheel" joint="torso_r_wheel" gear="1" ctrlrange="-15 15" ctrllimited="true"/>
     </actuator>
 </mujoco>

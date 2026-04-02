@@ -15,7 +15,7 @@ def main():
     T_ctl = ctl_interval * model.opt.timestep
     next_ctrl_time = 0.0
     start_time = time.time()
-    SIM_DURATION = 60.0
+    SIM_DURATION = 500.0
 
     # ID 获取
     motor_l = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_l_wheel")
@@ -27,18 +27,18 @@ def main():
     MAX_TORQUE = 20.0
 
     # 控制参数
-    target_vel = 1.0
+    target_vel = 1.5
 
     # 速度环（增量式 PI）
-    vel_kp = 0.5
+    vel_kp = 0.25
     vel_ki = 0.001
     vel_limit = 0.15                    # 期望倾角限幅（rad）
     vel_error_prev = 0.0
     vel_output = 0.0                    # 上次输出（期望倾角）
 
     # 角度环（位置式 PD）
-    ang_kp = 40
-    ang_kd = 3
+    ang_kp = 20
+    ang_kd = 1.5
 
     # 期望倾角变化率限制
     max_pitch_rate = 0.08
@@ -112,6 +112,8 @@ def main():
                           f"torque={torque:5.2f}")
 
                 next_ctrl_time += T_ctl
+                if data.time % 1 < T_ctl:
+                    print(f"pos_x={data.qpos[0]:.3f} m, vel={linear_vel:.2f} m/s")
 
             cam.lookat[:] = data.xpos[robot_body] + 0.03
             mujoco.mj_step(model, data)
