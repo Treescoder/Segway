@@ -1,0 +1,61 @@
+<mujoco model="balance">
+    <compiler angle="radian"/>
+    <size njmax="500" nconmax="100"/>
+    <asset>
+        <texture type="2d" name="wheel_texture" builtin="checker" mark="edge"
+                 rgb1="1 1 1" rgb2="1 0.3 0.3"
+                 markrgb="0.3 0.3 0.3" width="1024" height="1024"/>
+        <material name="wheel_material" texture="wheel_texture" texuniform="true" texrepeat="20 20"/>
+        <texture type="2d" name="body_texture" builtin="gradient" rgb1="0.9 0.3 0.5"
+                 rgb2="0.95 0.85 0.5" width="512" height="512"/>
+        <material name="body_material" texture="body_texture" texrepeat="4 2" shininess="0.3"/>
+    </asset>
+    <option gravity="0 0 -9.81" viscosity="0.002"/>
+    <worldbody>
+        <body name="segway" pos="0 0 0.09">
+            <joint name="segway_free" type="free"/>
+
+            <!-- 轮轴杆：加厚、加重，降低重心 -->
+            <body name="wheel_axle" pos="0 0 0.03">
+                <inertial pos="0.0 0.0 0.0" quat="0.707107 0 0 0.707107"
+                          mass="10.489" diaginertia="0.87993 0.64149 0.31774"/>
+                <geom type="box" size="0.3 0.05 0.02" material="body_material"/>
+            </body>
+
+            <!-- 倒立杆 -->
+            <body name="pendulum" pos="0 0 0.05">
+                <inertial pos="0.0 0.0 0.0" quat="0.707107 0 0 0.707107"
+                          mass="4.48164" diaginertia="0.75267 0.672276 0.0894829"/>
+                <geom type="cylinder" size="0.015 0.35" pos="0 0 0.35" material="body_material"/>
+            </body>
+
+            <!-- 左轮 -->
+            <body name="l_wheel" pos="-0.25 0 0.034">
+                <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5"
+                          mass="4.23004" diaginertia="0.01832 0.010662 0.0105854"/>
+                <joint name="torso_l_wheel" type="hinge" pos="0 0 0" axis="-1 0 0" damping="0.05"/>
+                <geom type="cylinder" size="0.1275 0.04" quat="0.707107 0 0.707107 0"
+                      material="wheel_material" contype="2" conaffinity="1" friction="2 1 0.8"/>
+                <geom type="cylinder" size="0.1275 0.04" quat="0.707107 0 0.707107 0"
+                      material="wheel_material"/>
+            </body>
+
+            <!-- 右轮 -->
+            <body name="r_wheel" pos="0.25 0 0.034">
+                <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5"
+                          mass="4.23004" diaginertia="0.01832 0.010662 0.0105854"/>
+                <joint name="torso_r_wheel" type="hinge" pos="0 0 0" axis="-1 0 0" damping="0.05"/>
+                <geom type="cylinder" size="0.1275 0.04" quat="0.707107 0 0.707107 0"
+                      material="wheel_material" contype="2" conaffinity="1" friction="2 1 0.8"/>
+                <geom type="cylinder" size="0.1275 0.04" quat="0.707107 0 0.707107 0"
+                      material="wheel_material"/>
+            </body>
+        </body>
+    </worldbody>
+
+    <actuator>
+        <!-- 添加力矩限幅，避免过激响应 -->
+        <motor name="motor_l_wheel" joint="torso_l_wheel" gear="1" ctrlrange="-15 15" ctrllimited="true"/>
+        <motor name="motor_r_wheel" joint="torso_r_wheel" gear="1" ctrlrange="-15 15" ctrllimited="true"/>
+    </actuator>
+</mujoco>

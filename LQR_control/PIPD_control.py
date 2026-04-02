@@ -29,23 +29,16 @@ def main():
     MAX_TORQUE = 20.0 # Nm
     start_time = time.time()
     SIM_DURATION = 50.0     # 仿真总时长（秒）
-    kp, kd, kv = 150.0, 20.0, 1.0
-    vel_filtered = pitch_dot_filtered = prev_pitch = 0.0
-    step_count = 0
-
-    # ===== 初始化 =====
+    target_vel = 3.0 # 目标速度
+    kp, kd, kv, ki = 5.0, 1.0, 20, 1.0
+    vel_filtered = pitch_dot_filtered = prev_pitch = step_count = 0.0
+    pitch_limit, vel_int = 0.15, 0.0
     x0 = data.qpos[0]
     v_integral = 0.0
     prev_time = data.time
 
-    log_error = []
-
     # ================== 数据记录 ==================
-    log_time = []
-    log_pitch = []
-    log_pitch_dot = []
-    log_lwheel_vel = []
-    log_rwheel_vel = []
+    log_time, log_pitch, log_pitch_dot, log_lwheel_vel, log_rwheel_vel, log_error = [], [], [], [], [], []
 
     # ================== 打开 MuJoCo 被动可视化窗口 ==================
     with (mujoco.viewer.launch_passive(model, data) as viewer):
@@ -53,15 +46,7 @@ def main():
         cam, cam.distance, cam.elevation, cam.azimuth = viewer.cam, 2.0, -60, 120
 
         while viewer.is_running():
-            step_start = time.time()
-            sim_time = time.time() - start_time
-            if sim_time > SIM_DURATION:
-                break
-
-            # ===== 在循环里 =====
-            current_time = data.time
-            dt = current_time - prev_time
-            prev_time = current_time
+            if time.time() - start_time > SIM_DURATION: break
 
             if data.time >= next_ctrl_time:
                 # ================== 读取状态（用于打印） ==================
@@ -70,13 +55,12 @@ def main():
                 pitch = R.as_euler('xyz', degrees=False)[0]
                 pitch_dot = (pitch - prev_pitch) / T_ctl
                 prev_pitch = pitch
-                # pitch_dot = data.qvel[3]
-
                 vel_l = data.qvel[lwheel_dof_idx] * WHEEL_RADIUS # 这个求的是角速度
                 vel_r = data.qvel[rwheel_dof_idx] * WHEEL_RADIUS
                 vel = (vel_l + vel_r) / 2.0
                 v_world = data.qvel[0:3]
                 v_forward = v_world[1]  # 假设x方向前进
+                # pitch_dot = data.qvel[3]
                 # print(f"real={v_forward:.3f}, wheel_est={vel:.3f}") # 轮速和车速有一些偏差
                 # v_integral += v_forward * dt
                 # x_real = data.qpos[1] - x0
@@ -88,11 +72,18 @@ def main():
                 pitch_dot_filtered = (pitch_dot_filtered * .9) + (pitch_dot * .1)
                 vel_filtered = (vel_filtered * .975) + (v_forward * .025)
 
-                torque = - kp * pitch - kd * pitch_dot + kv * (1.0 - vel_filtered)
+                # ===== 外环（速度 PI → 倾角）=====
+                vel_err = target_vel - v_forward
+                vel_int += vel_err * T_ctl
+                target_pitch = kv * vel_err + ki * vel_int
+                target_pitch = np.clip(target_pitch, -pitch_limit, pitch_limit)
+
+                # ===== 内环（倾角 PD → 力矩）=====
+                torque = kp * (pitch - target_pitch) + kd * pitch_dot_filtered
                 torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
 
-                data.ctrl[motor_l_wheel] = torque
-                data.ctrl[motor_r_wheel] = torque
+                data.ctrl[motor_l_wheel] = - torque
+                data.ctrl[motor_r_wheel] = - torque
 
                 log_time.append(data.time)
                 log_pitch.append(pitch)
@@ -112,7 +103,6 @@ def main():
                 next_ctrl_time += T_ctl
 
             cam.lookat[:] = data.xpos[segway]
-
             mujoco.mj_step(model, data)
             step_count += 1
             if step_count % 15 == 0:
