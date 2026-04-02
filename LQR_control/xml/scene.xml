@@ -30,7 +30,7 @@
 
     <!-- 圆形轨迹参考线 (半径 12 米) -->
     <body name="circle_ref" pos="0 0 0">
-      <geom type="cylinder" size="12 0.05" quat="0.707107 0 0.707107 0" material="circle_mat" contype="0" conaffinity="0"/>
+      <geom type="cylinder" size="70 0.05" quat="0.707107 0 0.707107 0" material="circle_mat" contype="0" conaffinity="0"/>
     </body>
 
     <!-- 圆周上的彩色小球 (半径 0.15 米) -->

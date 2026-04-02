@@ -15,7 +15,7 @@ def main():
     T_ctl = ctl_interval * model.opt.timestep
     next_ctrl_time = 0.0
     start_time = time.time()
-    SIM_DURATION = 500.0            # 仿真时长，根据需要调整
+    SIM_DURATION = 60.0            # 仿真时长，建议覆盖多个周期
 
     # ID 获取
     motor_l = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_l_wheel")
@@ -30,7 +30,7 @@ def main():
     # 目标速度 (m/s)
     target_vel = 1.0
 
-    # ----- 平衡与速度控制器参数 -----
+    # ----- 平衡与速度控制器参数 (保持不变) -----
     vel_kp = 0.5
     vel_ki = 0.001
     vel_limit = 0.15
@@ -47,14 +47,22 @@ def main():
     alpha = 0.1
     prev_target_pitch = 0.0
 
-    # ----- 转向控制: 固定转向差动量（走大圆）-----
-    STEER_TORQUE_CONSTANT = 0.9      # 调小获得更大圆，0 为直线
+    # ----- 周期性曲线转向控制参数 (正弦期望航向角) -----
+    yaw_amplitude = 0.7        # 航向角幅度 (rad)，约28.6度
+    yaw_frequency = 0.07        # 频率 (Hz)，即每秒摆动次数
+    # 期望航向角: desired_yaw = amplitude * sin(2*pi*frequency*t)
+
+    # 转向 PD 控制器参数
+    steer_kp = 2.0             # 比例增益
+    steer_kd = 0.2             # 微分增益
+    prev_yaw_error = 0.0
 
     # ----- 数据记录 -----
     record_time = []
     record_x = []
     record_y = []
     record_yaw = []
+    record_desired_yaw = []
     record_pitch = []
     record_target_pitch = []
     record_vel = []
@@ -109,8 +117,17 @@ def main():
                 balance_torque = ang_kp * (pitch - target_pitch) + ang_kd * pitch_dot_filtered
                 balance_torque = np.clip(balance_torque, -MAX_TORQUE, MAX_TORQUE)
 
-                # ---------- 转向差动量 ----------
-                steer_torque = STEER_TORQUE_CONSTANT
+                # ---------- 周期性期望航向角生成 (正弦) ----------
+                t = sim_time
+                desired_yaw = yaw_amplitude * np.sin(2 * np.pi * yaw_frequency * t)
+
+                # 航向角误差，归一化到 [-pi, pi]
+                yaw_error = desired_yaw - yaw
+                yaw_error = np.arctan2(np.sin(yaw_error), np.cos(yaw_error))
+
+                # PD 控制输出转向扭矩
+                steer_torque = steer_kp * yaw_error + steer_kd * (yaw_error - prev_yaw_error) / T_ctl
+                prev_yaw_error = yaw_error
                 steer_torque = np.clip(steer_torque, -MAX_STEER_TORQUE, MAX_STEER_TORQUE)
 
                 # ---------- 控制分配 ----------
@@ -126,6 +143,7 @@ def main():
                 record_x.append(pos_x)
                 record_y.append(pos_y)
                 record_yaw.append(yaw)
+                record_desired_yaw.append(desired_yaw)
                 record_pitch.append(pitch)
                 record_target_pitch.append(target_pitch)
                 record_vel.append(linear_vel)
@@ -135,11 +153,12 @@ def main():
                 if data.time % 0.2 < T_ctl:
                     print(f"[t={sim_time:5.2f}s] "
                           f"pitch={np.degrees(pitch):5.2f}° "
-                          f"vel_l={vel_l:5.2f} vel_r={vel_r:5.2f} "
                           f"vel={linear_vel:5.2f} m/s "
                           f"x={pos_x:6.2f} m, y={pos_y:6.2f} m "
+                          f"des_yaw={np.degrees(desired_yaw):5.1f}° "
+                          f"yaw_err={np.degrees(yaw_error):5.1f}° "
                           f"balance_torque={balance_torque:5.2f} Nm  "
-                          )
+                          f"left_cmd_raw={left_cmd_raw:5.2f} right_cmd_raw={right_cmd_raw:5.2f}")
 
                 next_ctrl_time += T_ctl
 
@@ -148,10 +167,10 @@ def main():
             viewer.sync()
 
     # 仿真结束，绘制曲线
-    plot_results(record_time, record_x, record_y, record_yaw, record_pitch,
-                 record_target_pitch, record_vel, record_torque)
+    plot_results(record_time, record_x, record_y, record_yaw, record_desired_yaw,
+                 record_pitch, record_target_pitch, record_vel, record_torque)
 
-def plot_results(t, x, y, yaw, pitch, target_pitch, vel, torque):
+def plot_results(t, x, y, yaw, desired_yaw, pitch, target_pitch, vel, torque):
     plt.figure(figsize=(12, 10))
 
     # 轨迹图
@@ -159,7 +178,7 @@ def plot_results(t, x, y, yaw, pitch, target_pitch, vel, torque):
     plt.plot(x, y, 'b-', linewidth=1.5)
     plt.xlabel('X (m)')
     plt.ylabel('Y (m)')
-    plt.title('Vehicle Trajectory')
+    plt.title('Vehicle Trajectory (Periodic Curve)')
     plt.axis('equal')
     plt.grid(True)
 
@@ -181,12 +200,14 @@ def plot_results(t, x, y, yaw, pitch, target_pitch, vel, torque):
     plt.legend()
     plt.grid(True)
 
-    # 航向角（用于观察转向效果）
+    # 航向角跟踪（实际 vs 期望）
     plt.subplot(2, 2, 4)
-    plt.plot(t, np.rad2deg(yaw), 'm-', linewidth=1.5)
+    plt.plot(t, np.rad2deg(yaw), 'm-', label='Actual Yaw', linewidth=1.5)
+    plt.plot(t, np.rad2deg(desired_yaw), 'c--', label='Desired Yaw', linewidth=1.5)
     plt.xlabel('Time (s)')
     plt.ylabel('Yaw Angle (deg)')
-    plt.title('Yaw Angle vs Time')
+    plt.title('Yaw Angle Tracking (Periodic)')
+    plt.legend()
     plt.grid(True)
 
     plt.tight_layout()
