@@ -3,7 +3,6 @@ import mujoco.viewer
 import numpy as np
 from scipy.spatial.transform import Rotation
 import time
-import math
 
 def main():
     model = mujoco.MjModel.from_xml_path(r"xml\scene.xml")
