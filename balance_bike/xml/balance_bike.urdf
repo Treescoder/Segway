@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="balance_bike">
+  <mujoco>
+  <compiler
+    meshdir="D:\Work_Learn\Segway\balance_bike\xml\meshes"
+    balanceinertia="true"
+    discardvisual="false" />
+  </mujoco>
+  <link
+    name="frame">
+    <inertial>
+      <origin
+        xyz="0.00011201 -0.0002289 -0.0099966"
+        rpy="0 0 0" />
+      <mass
+        value="0.687" />
+      <inertia
+        ixx="0.0010866"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="0.0016358"
+        iyz="0.0"
+        izz="0.0010183" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="D:\Work_Learn\Segway\balance_bike\xml\meshes\frame.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="D:\Work_Learn\Segway\balance_bike\xml\meshes\frame.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="leftwheel">
+    <inertial>
+      <origin
+        xyz="1.3018E-07 -0.00012912 -2.4579E-08"
+        rpy="0 0 0" />
+      <mass
+        value="0.035" />
+      <inertia
+        ixx="1.1850e-5"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="1.9757e-5"
+        iyz="0.0"
+        izz="1.1850e-5" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="D:\Work_Learn\Segway\balance_bike\xml\meshes\leftwheel.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="D:\Work_Learn\Segway\balance_bike\xml\meshes\leftwheel.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="lunL"
+    type="revolute">
+    <origin
+      xyz="-0.00041408 -0.08048 0.036937"
+      rpy="0 0 0" />
+    <parent
+      link="frame" />
+    <child
+      link="leftwheel" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="rightwheel">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.035" />
+      <inertia
+        ixx="1.1850e-5"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="1.9757e-5"
+        iyz="0.0"
+        izz="1.1850e-5" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="D:\Work_Learn\Segway\balance_bike\xml\meshes\rightwheel.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="D:\Work_Learn\Segway\balance_bike\xml\meshes\rightwheel.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="lunR"
+    type="revolute">
+    <origin
+      xyz="-0.00041408 0.08048 0.036937"
+      rpy="0 0 0" />
+    <parent
+      link="frame" />
+    <child
+      link="rightwheel" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+  </joint>
+</robot>

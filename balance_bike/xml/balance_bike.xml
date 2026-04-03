@@ -1,0 +1,31 @@
+<mujoco model="balance_bike">
+  <compiler angle="radian" meshdir="D:\Work_Learn\Segway\balance_bike\xml\meshes/" autolimits="true"/>
+  <statistic meansize="0.0747097" extent="0.259935" center="5.01557e-05 1.40533e-09 -0.0238091"/>
+  <asset>
+    <mesh name="frame" file="frame.STL"/>
+    <mesh name="leftwheel" file="leftwheel.STL"/>
+    <mesh name="rightwheel" file="rightwheel.STL"/>
+  </asset>
+  <worldbody>
+    <body name="frame">
+      <inertial pos="0.00011201 -0.0002289 -0.0099966" quat="0.707107 0 0 0.707107" mass="0.687" diaginertia="0.0016358 0.0010866 0.0010183"/>
+      <joint name="frame_free_joint" type="free"/>
+      <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="frame"/>
+      <geom type="mesh" rgba="1 1 1 1" mesh="frame"/>
+
+      <body name="leftwheel" pos="-0.00041408 -0.08048 0.036937">
+        <inertial pos="1.3018e-07 -0.00012912 -2.4579e-08" quat="0.707107 0 0 0.707107" mass="0.035" diaginertia="1.9757e-05 1.185e-05 1.185e-05"/>
+        <joint name="lunL" pos="0 0 0" axis="0 -1 0"/>
+        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="leftwheel"/>
+        <geom type="mesh" rgba="1 1 1 1" mesh="leftwheel"/>
+      </body>
+
+      <body name="rightwheel" pos="-0.00041408 0.08048 0.036937">
+        <inertial pos="0 0 0" quat="0.707107 0 0 0.707107" mass="0.035" diaginertia="1.9757e-05 1.185e-05 1.185e-05"/>
+        <joint name="lunR" pos="0 0 0" axis="0 1 0"/>
+        <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="1 1 1 1" mesh="rightwheel"/>
+        <geom type="mesh" rgba="1 1 1 1" mesh="rightwheel"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
