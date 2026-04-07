@@ -16,7 +16,7 @@ def move_window_to_second_screen(
     primary_w = user32.GetSystemMetrics(0)
 
     # 当前前台窗口句柄
-    hwnd = user32.FindWindowW(None, "MuJoCo : scooter scene")
+    hwnd = user32.FindWindowW(None, "MuJoCo : balance_bike scene")
 
 
     # 如果没找到，稍微等一下（窗口刚创建时）
