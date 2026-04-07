@@ -14,7 +14,7 @@ def main():
     T_ctl = ctl_interval * model.opt.timestep
     next_ctrl_time = 0.0
     start_time = time.time()
-    SIM_DURATION = 500.0
+    SIM_DURATION = 50.0
 
     # ID 获取
     motor_l = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_l_wheel")

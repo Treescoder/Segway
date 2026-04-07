@@ -29,7 +29,7 @@ def main():
     MAX_TORQUE = 20.0 # Nm
     start_time = time.time()
     SIM_DURATION = 50.0     # 仿真总时长（秒）
-    target_vel = 3.0 # 目标速度
+    target_vel = 0.1 # 目标速度
     kp, kd, kv, ki = 5.0, 1.0, 20, 1.0
     vel_filtered = pitch_dot_filtered = prev_pitch = step_count = 0.0
     pitch_limit, vel_int = 0.15, 0.0

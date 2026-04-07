@@ -32,7 +32,7 @@ def move_window_to_second_screen(
         return
 
     # 目标位置（右侧扩展屏）
-    x = offset_x
+    x = offset_x + primary_w
     y = offset_y
 
     # 0x0004 = SWP_NOZORDER（不改变层级）
