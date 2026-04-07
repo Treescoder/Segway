@@ -18,16 +18,16 @@ def main():
     SIM_DURATION = 500.0
 
     # ID 获取
-    motor_l = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_l_wheel")
-    motor_r = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_r_wheel")
-    robot_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot_body")
+    motor_l = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "left_motor")
+    motor_r = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "right_motor")
+    robot_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "golf_main")
 
     # 模型参数
-    WHEEL_RADIUS = 0.1275
+    WHEEL_RADIUS = 0.0336
     MAX_TORQUE = 20.0
 
 
-    target_vel = 1.0  # 目标速度
+    target_vel = 0.0  # 目标速度
 
     # 速度环（增量式 PI）
     vel_kp = 0.5                        # 0.25
@@ -37,9 +37,9 @@ def main():
     vel_output = 0.0                    # 上次输出（期望倾角）
 
     # 角度环（位置式 PD）
-    ang_kp = 50                         # 20
-    ang_kd = 0.01                       # 1.5
-    max_pitch_rate = 0.07  # 期望倾角变化率限制：静止时小一点0.02，运动时大一点0.07
+    ang_kp = 1.7                        # 20
+    ang_kd = 0.001                      # 1.5
+    max_pitch_rate = 0.01  # 期望倾角变化率限制：静止时小一点0.02，运动时大一点0.07
     prev_pitch = pitch_dot_filtered = prev_target_pitch = 0.0
 
     with mujoco.viewer.launch_passive(model, data) as viewer:
@@ -55,14 +55,14 @@ def main():
 
             if data.time >= next_ctrl_time:
                 # ---- 状态读取 ----
-                quat = data.body("robot_body").xquat
+                quat = data.body("golf_main").xquat
                 R = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
                 pitch = R.as_euler('xyz', degrees=False)[0]
                 pitch_dot = (pitch - prev_pitch) / T_ctl
                 prev_pitch = pitch
 
-                ang_vel_l = data.joint("torso_l_wheel").qvel[0]
-                ang_vel_r = data.joint("torso_r_wheel").qvel[0]
+                ang_vel_l = data.joint("lunL").qvel[0]
+                ang_vel_r = data.joint("lunR").qvel[0]
                 vel_l = ang_vel_l * WHEEL_RADIUS
                 vel_r = ang_vel_r * WHEEL_RADIUS
                 linear_vel = (-vel_l + vel_r) / 2.0
@@ -91,7 +91,7 @@ def main():
                 torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
 
                 # ---- 执行 ----
-                data.ctrl[motor_l] = -torque
+                data.ctrl[motor_l] = torque
                 data.ctrl[motor_r] = torque
 
                 # ---- 打印 ----
