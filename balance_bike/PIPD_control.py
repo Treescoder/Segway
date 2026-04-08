@@ -28,9 +28,9 @@ def main():
     WHEEL_RADIUS = 0.0336
     MAX_TORQUE = 20.0 # Nm
     start_time = time.time()
-    SIM_DURATION = 50.0     # 仿真总时长（秒）
+    SIM_DURATION = 500.0     # 仿真总时长（秒）
     target_vel = 0.0 # 目标速度
-    kp, kd, kv, ki = 30.0, 0.1, 20.0, 0.1
+    kp, kd, kv, ki = 30.0, 0.01, 10.0, 0.01
     vel_filtered = pitch_dot_filtered = prev_pitch = step_count = 0.0
     pitch_limit, vel_int, target_pitch = 0.15, 0.0, 0.0
     x0 = data.qpos[0]
@@ -55,12 +55,12 @@ def main():
                 pitch = R.as_euler('xyz', degrees=False)[1]
                 pitch_dot = (pitch - prev_pitch) / T_ctl
                 prev_pitch = pitch
+                pitch_dot = data.qvel[2]
                 vel_l = data.qvel[lunL_dof_idx] * WHEEL_RADIUS # 这个求的是角速度
                 vel_r = data.qvel[lunR_dof_idx] * WHEEL_RADIUS
                 vel = (vel_l - vel_r) / 2.0
-                v_world = data.qvel[0:3]
-                v_forward = v_world[1]  # 假设x方向前进
-                pitch_dot = data.qvel[2]
+                # v_world = data.qvel[0:3]
+                # v_forward = v_world[1]  # 假设x方向前进
                 # print(f"real={v_forward:.3f}, wheel_est={vel:.3f}") # 轮速和车速有一些偏差
                 # v_integral += v_forward * T_ctl
                 # x_real = data.qpos[1] - x0
@@ -69,16 +69,16 @@ def main():
                 # print(f"x_real={x_real:.4f}, int_v={v_integral:.4f}, err={error:.6f}")
                 # print(f"sim_time={data.time:.2f}")
                 pitch_dot_filtered = (pitch_dot_filtered * .9) + (pitch_dot * .1)
-                vel_filtered = (vel_filtered * .975) + (v_forward * .025)
+                vel_filtered = (vel_filtered * .975) + (vel * .025)
 
                 # ===== 外环（速度 PI → 倾角）=====
-                vel_err = target_vel - v_forward
+                vel_err = target_vel - vel_filtered
                 vel_int += vel_err * T_ctl
-                target_pitch += kv * vel_err + ki * vel_int
+                target_pitch = kv * vel_err + ki * vel_int
                 target_pitch = np.clip(target_pitch, -pitch_limit, pitch_limit)
 
                 # ===== 内环（倾角 PD → 力矩）=====
-                torque = kp * (target_pitch - pitch) + kd * pitch_dot
+                torque = kp * (target_pitch - pitch) + kd * pitch_dot_filtered
                 torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
 
                 data.ctrl[lunL_motor] = -torque
@@ -103,10 +103,10 @@ def main():
 
             cam.lookat[:] = data.xpos[golf_body]
             mujoco.mj_step(model, data)
-            # step_count += 1
-            # if step_count % 15 == 0:
-            #     time.sleep(0.01)  # 固定帧率 ~100Hz
-            viewer.sync()
+            step_count += 1
+            if step_count % 16 == 0:
+                time.sleep(0.01)  # 固定帧率 ~100Hz
+                viewer.sync()
 
 if __name__ == "__main__":
     main()
