@@ -3,14 +3,15 @@ import mujoco.viewer
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation
+import matplotlib.pyplot as plt
 
 def main():
     model = mujoco.MjModel.from_xml_path(r"xml\scene.xml")
     data = mujoco.MjData(model)
 
     # ================== 仿真 & 控制时间设置 ==================
-    dt = model.opt.timestep = 0.001          # 仿真步长 dt = 2 ms
-    ctl_interval = 20                   # 每 25 个 step 更新一次控制
+    dt = model.opt.timestep = 0.001
+    ctl_interval = 20
     T_ctl = ctl_interval * model.opt.timestep
     next_ctrl_time = 0.0
 
@@ -25,81 +26,124 @@ def main():
 
     # ================== 仿真参数 ==================
     WHEEL_RADIUS = 0.0336
-    MAX_TORQUE = 20.0 # Nm
+    MAX_TORQUE = 20.0
     start_time = time.time()
-    SIM_DURATION = 500.0     # 仿真总时长（秒）
-    target_vel = 0.0 # 目标速度
-    kp, kd, kv, ki = 10.0, 0.001, 15, 0.5
-    vel_filtered = pitch_dot_filtered = prev_pitch = step_count = 0.0
-    pitch_limit, vel_int, target_pitch = 0.05, 0.0, 0.0
-    x0 = data.qpos[0]
-    v_integral = 0.0
-    prev_time = data.time
+    SIM_DURATION = 30.0
+    target_vel = 0.8  # 先用低速，稳定后可提高
+
+    # ---------- 控制器参数 ----------
+    kp = 15.0
+    kd = 0.01
+    kv = 20.0          # 比例增益适中
+    ki = 3.0           # 积分增益较小，依赖前馈
+    pitch_limit = 0.05  # 限制最大倾角，防止过冲
+    # 前馈力矩，根据稳态观测设定，这里给一个合理估计值（若不准可微调）
+    feedforward_torque = 1.2
+
+    # 状态变量
+    vel_filtered = 0.0
+    pitch_dot_filtered = 0.0
+    prev_pitch = 0.0
+    vel_int = 0.0
+    target_pitch = 0.0
 
     # ================== 数据记录 ==================
-    log_time, log_pitch, log_pitch_dot, log_lwheel_vel, log_rwheel_vel, log_error = [], [], [], [], [], []
+    log_time, log_pitch, log_pitch_dot = [], [], []
+    log_lwheel_vel, log_rwheel_vel, log_torque = [], [], []
+    log_target_pitch = []
 
-    # ================== 打开 MuJoCo 被动可视化窗口 ==================
+    # ================== 打开 MuJoCo 可视化窗口 ==================
     with mujoco.viewer.launch_passive(model, data) as viewer:
-        # move_window_to_second_screen(10, 20, 1900, 900)
-        cam, cam.distance, cam.elevation, cam.azimuth = viewer.cam, 0.5, -30, 40
+        cam = viewer.cam
+        cam.distance, cam.elevation, cam.azimuth = 0.5, -30, 40
 
         while viewer.is_running():
-            if time.time() - start_time > SIM_DURATION: break
+            if time.time() - start_time > SIM_DURATION:
+                break
 
             if data.time >= next_ctrl_time:
-                # ================== 读取状态（用于打印） ==================
+                # ---------- 状态读取 ----------
                 quat = data.body("golf_main").xquat
                 R = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
                 pitch = R.as_euler('xyz', degrees=False)[1]
                 pitch_dot = (pitch - prev_pitch) / T_ctl
                 prev_pitch = pitch
-                vel_l = data.qvel[lunL_dof_idx] * WHEEL_RADIUS # 这个求的是角速度
+
+                vel_l = data.qvel[lunL_dof_idx] * WHEEL_RADIUS
                 vel_r = data.qvel[lunR_dof_idx] * WHEEL_RADIUS
                 vel = (vel_l - vel_r) / 2.0
-                v_world = data.qvel[0:3]
-                v_forward = v_world[1]  # 假设x方向前进
-                # pitch_dot = data.qvel[2]
-                pitch_dot_filtered = (pitch_dot_filtered * .9) + (pitch_dot * .1)
-                vel_filtered = (vel_filtered * .975) + (vel * .025)
 
-                # ===== 外环（速度 PI → 倾角）=====
+                # 滤波
+                pitch_dot_filtered = 0.9 * pitch_dot_filtered + 0.1 * pitch_dot
+                vel_filtered = 0.8 * vel_filtered + 0.2 * vel  # 稍微加快速度反馈
+
+                # ---------- 外环（速度 PI → 倾角） ----------
                 vel_err = target_vel - vel_filtered
-                vel_int += vel_err * T_ctl
-                target_pitch += kv * vel_err + ki * vel_int
-                target_pitch = np.clip(target_pitch, -pitch_limit, pitch_limit)
+                # 动态目标倾角，并加入随速度误差减小而衰减的因子（防止超调）
+                target_pitch = kv * vel_err + ki * vel_int
+                # 当速度接近目标时，进一步限制目标倾角
+                max_pitch = pitch_limit * min(1.0, abs(vel_err) * 5.0)
+                target_pitch = np.clip(target_pitch, -max_pitch, max_pitch)
 
-                # ===== 内环（倾角 PD → 力矩）=====
-                torque = kp * (target_pitch  - pitch) + kd * pitch_dot_filtered
+                # ---------- 内环（倾角 PD → 力矩） ----------
+                torque = kp * (target_pitch - pitch) + kd * pitch_dot_filtered
+                torque += feedforward_torque
                 torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
 
                 data.ctrl[lunL_motor] = -torque
                 data.ctrl[lunR_motor] = torque
 
+                # ---------- 记录数据 ----------
                 log_time.append(data.time)
                 log_pitch.append(pitch)
-                log_pitch_dot.append(pitch_dot)
+                log_pitch_dot.append(pitch_dot_filtered)
                 log_lwheel_vel.append(vel_l)
                 log_rwheel_vel.append(vel_r)
+                log_torque.append(torque)
+                log_target_pitch.append(target_pitch)
 
-                # ------------------ 实时打印 ------------------
                 if data.time % 0.25 < T_ctl:
                     print(f"[t={data.time:5.2f}s] "
-                          f"[target_pitch={target_pitch:5.2f}] ]"
-                          f"[pitch={pitch:5.2f}] "
-                          f"[pitch_dot={pitch_dot_filtered:5.2f}] "
-                          f"[vel_l={vel_l:5.2f}/vel={vel:5.2f} "
-                          f"[vel_r={vel_r:5.2f}]"
-                          f"[torque={torque:5.2f}]")
+                          f"target_pitch={target_pitch:6.3f} | "
+                          f"pitch={pitch:6.3f} | "
+                          f"vel_f={vel_filtered:5.2f} / vel={vel:5.2f} | "
+                          f"torque={torque:6.2f} | "
+                          f"int={vel_int:6.3f}")
 
                 next_ctrl_time += T_ctl
 
             cam.lookat[:] = data.xpos[golf_body]
             mujoco.mj_step(model, data)
-            # step_count += 1
-            # if step_count % 15 == 0:
-            #     time.sleep(0.01)  # 固定帧率 ~100Hz
             viewer.sync()
+
+    # ================== 绘图 ==================
+    log_vel = [(vl - vr) / 2.0 for vl, vr in zip(log_lwheel_vel, log_rwheel_vel)]
+
+    plt.figure(figsize=(10, 8))
+
+    plt.subplot(3, 1, 1)
+    plt.plot(log_time, np.degrees(log_pitch), 'b-', linewidth=1.5)
+    plt.plot(log_time, np.degrees(log_target_pitch), 'r--', linewidth=1.0, label='target pitch')
+    plt.ylabel('Pitch (deg)')
+    plt.grid(True)
+    plt.legend()
+    plt.title('Simulation Results (Stable with Feedforward)')
+
+    plt.subplot(3, 1, 2)
+    plt.plot(log_time, log_vel, 'r-', linewidth=1.5)
+    plt.axhline(y=target_vel, color='k', linestyle='--', label=f'Target = {target_vel} m/s')
+    plt.ylabel('Velocity (m/s)')
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(3, 1, 3)
+    plt.plot(log_time, log_torque, 'g-', linewidth=1.5)
+    plt.xlabel('Time (s)')
+    plt.ylabel('Torque (Nm)')
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
     main()
