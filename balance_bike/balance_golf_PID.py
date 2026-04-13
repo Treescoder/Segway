@@ -28,8 +28,8 @@ def main():
     WHEEL_RADIUS = 0.0336
     MAX_TORQUE = 20.0
     start_time = time.time()
-    SIM_DURATION = 30.0
-    target_vel = 0.8  # 先用低速，稳定后可提高
+    SIM_DURATION = 1000.0
+    target_vel = 1.5  # 先用低速，稳定后可提高
 
     # ---------- 控制器参数 ----------
     kp = 15.0
