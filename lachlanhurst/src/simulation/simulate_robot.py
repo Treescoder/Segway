@@ -16,7 +16,7 @@ from PySide6.QtGui import (
 )
 import time
 
-from robot_lqr import RobotLqr
+from lachlanhurst.src.simulation.robot_lqr import RobotLqr
 
 
 format = QSurfaceFormat()
@@ -54,6 +54,7 @@ class Viewport(QOpenGLWindow):
         self.timer.setInterval(1/60*1000)
         self.timer.timeout.connect(self.update)
         self.timer.start()
+        self.body_id = model.body('robot_body').id  # 获取机器人身体 ID（用于跟随）
 
     def mousePressEvent(self, event):
         self.__last_pos = event.position()
@@ -90,6 +91,10 @@ class Viewport(QOpenGLWindow):
         self.scale = scaleFactor
 
     def paintGL(self) -> None:
+        # 让摄像机跟随机器人身体
+        body_pos = self.data.xpos[self.body_id]
+        self.cam.lookat = body_pos.copy()
+
         t = time.time()
         mujoco.mjv_updateScene(self.model, self.data, self.opt, None, self.cam, mujoco.mjtCatBit.mjCAT_ALL, self.scn)
         viewport = mujoco.MjrRect(0, 0, int(self.width * self.scale), int(self.height * self.scale))
@@ -113,8 +118,16 @@ class UpdateSimThread(QThread):
         self.speed = 0.0
         self.yaw = 0.0
 
+        # 预先获取关键元素的 id，避免每帧查找
+        self.body_id = self.model.body('robot_body').id
+        self.l_joint_id = self.model.joint('torso_l_wheel').id
+        self.r_joint_id = self.model.joint('torso_r_wheel').id
+
         # reset the simulation timer
         self.reset()
+
+        # 打印调试信息的计时器
+        self.last_print_time = 0.0
 
     @property
     def real_time(self):
@@ -139,8 +152,63 @@ class UpdateSimThread(QThread):
 
                 # step the simulation
                 mujoco.mj_step(self.model, self.data)
+
+                # 定期打印调试信息（每 0.5 秒一次）
+                current_time = self.data.time
+                if current_time - self.last_print_time >= 0.5:
+                    self.last_print_time = current_time
+                    self._print_debug_info()
             else:
                 time.sleep(0.00001)
+
+    def _print_debug_info(self):
+        """打印详细状态：欧拉角、车轮速度/实际扭矩、LQR控制输出"""
+        try:
+            # 1. 四元数转欧拉角 (ZYX 顺序: yaw, pitch, roll)
+            quat = self.data.xquat[self.body_id]  # [w,x,y,z]
+            # 使用 scipy 的 Rotation 转换（需要安装 scipy，如果没有可以手动计算）
+            try:
+                from scipy.spatial.transform import Rotation as R
+                r = R.from_quat([quat[1], quat[2], quat[3], quat[0]])  # [x,y,z,w] 顺序
+                euler = r.as_euler('zyx', degrees=True)  # 返回 [yaw, pitch, roll] 角度制
+                yaw, pitch, roll = euler
+            except ImportError:
+                # 手动计算 (ZYX 顺序, 使用常见公式)
+                qw, qx, qy, qz = quat
+                # roll (x轴旋转)
+                sinr_cosp = 2 * (qw * qx + qy * qz)
+                cosr_cosp = 1 - 2 * (qx * qx + qy * qy)
+                roll = np.arctan2(sinr_cosp, cosr_cosp)
+                # pitch (y轴旋转)
+                sinp = 2 * (qw * qy - qz * qx)
+                pitch = np.arcsin(np.clip(sinp, -1, 1))
+                # yaw (z轴旋转)
+                siny_cosp = 2 * (qw * qz + qx * qy)
+                cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
+                yaw = np.arctan2(siny_cosp, cosy_cosp)
+                roll, pitch, yaw = np.degrees([roll, pitch, yaw])
+
+            # 2. 车轮角速度和实际电机扭矩
+            l_vel = self.data.qvel[self.l_joint_id]
+            r_vel = self.data.qvel[self.r_joint_id]
+            l_torque = self.data.actuator_force[0]  # 实际执行器力
+            r_torque = self.data.actuator_force[1]
+
+            # 3. LQR 计算的目标控制量（通常是电机速度或力）
+            #    如果 RobotLqr 有公开的控制变量，例如 self.robot.motor_speed 或 self.robot.torque
+            #    如果没有，可以打印 MuJoCo 中的 ctrl 数组（执行器控制输入）
+            #    假设执行器控制输入存储在 data.ctrl[0] 和 data.ctrl[1]
+            l_ctrl = self.data.ctrl[0]  # 左电机目标速度/力
+            r_ctrl = self.data.ctrl[1]  # 右电机目标速度/力
+
+            # 4. 打印所有信息
+            print(f"[t={self.data.time:.2f}s] "
+                  f"pitch={pitch:6.2f}° roll={roll:6.2f}° yaw={yaw:6.2f}° | "
+                  f"L: vel={l_vel:6.2f} rad/s, torque={l_torque:6.2f}, ctrl={l_ctrl:6.2f} | "
+                  f"R: vel={r_vel:6.2f} rad/s, torque={r_torque:6.2f}, ctrl={r_ctrl:6.2f} | "
+                  f"Target: speed={self.speed:5.2f}, yaw={self.yaw:5.2f}")
+        except Exception as e:
+            print(f"Debug print error: {e}")
 
     def stop(self):
         self.running = False
@@ -150,6 +218,7 @@ class UpdateSimThread(QThread):
         self.real_time_start = time.monotonic_ns()
         self.last_robot_update = time.monotonic_ns()
         self.robot.reset()
+        self.last_print_time = 0.0
 
     def set_speed(self, speed: float) -> None:
         self.speed = speed
