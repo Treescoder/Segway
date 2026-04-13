@@ -10,8 +10,8 @@ def main():
     data = mujoco.MjData(model)
 
     # ================== 仿真 & 控制时间设置 ==================
-    dt = model.opt.timestep = 0.001          # 仿真步长 dt = 2 ms
-    ctl_interval = 1                    # 每 25 个 step 更新一次控制
+    dt = model.opt.timestep = 0.0005          # 仿真步长 dt = 2 ms
+    ctl_interval = 20                    # 每 25 个 step 更新一次控制
     T_ctl = ctl_interval * model.opt.timestep
     next_ctrl_time = 0.0
 
@@ -29,10 +29,10 @@ def main():
     MAX_TORQUE = 20.0 # Nm
     start_time = time.time()
     SIM_DURATION = 500.0     # 仿真总时长（秒）
-    target_vel = 0.0 # 目标速度
-    kp, kd, kv, ki = 30.0, 0.01, 10.0, 0.01
+    target_vel = 1.0 # 目标速度
+    kp, kd, kv, ki = 30.0, 0.001, 20.0, 0.1
     vel_filtered = pitch_dot_filtered = prev_pitch = step_count = 0.0
-    pitch_limit, vel_int, target_pitch = 0.15, 0.0, 0.0
+    pitch_limit, vel_int, target_pitch = 0.08, 0.0, 0.0
     x0 = data.qpos[0]
     v_integral = 0.0
     prev_time = data.time
@@ -103,10 +103,10 @@ def main():
 
             cam.lookat[:] = data.xpos[golf_body]
             mujoco.mj_step(model, data)
-            step_count += 1
-            if step_count % 16 == 0:
-                time.sleep(0.01)  # 固定帧率 ~100Hz
-                viewer.sync()
+            # step_count += 1
+            # if step_count % 16 == 0:
+            #     time.sleep(0.01)  # 固定帧率 ~100Hz
+            viewer.sync()
 
 if __name__ == "__main__":
     main()

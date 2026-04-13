@@ -1,5 +1,5 @@
 <mujoco model="segway scene">
-  <include file="segway1.xml"/>
+  <include file="segway.xml"/>
   <statistic center="0.3 0 0.4" extent="0.8"/>
   <visual>
     <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0"/>
