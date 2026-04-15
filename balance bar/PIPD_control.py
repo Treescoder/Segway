@@ -32,7 +32,7 @@ def main():
     target_vel = 0.1 # 目标速度
     kp, kd, kv, ki = 5.0, 1.0, 20, 1.0
     vel_filtered = pitch_dot_filtered = prev_pitch = step_count = 0.0
-    pitch_limit, vel_int = 0.15, 0.0
+    pitch_limit, vel_int = 0.05, 0.0
     x0 = data.qpos[0]
     v_integral = 0.0
     prev_time = data.time
@@ -75,7 +75,8 @@ def main():
                 # ===== 外环（速度 PI → 倾角）=====
                 vel_err = target_vel - v_forward
                 vel_int += vel_err * T_ctl
-                target_pitch = kv * vel_err + ki * vel_int
+                target_pitch = 0.0
+                target_pitch += kv * vel_err + ki * vel_int
                 target_pitch = np.clip(target_pitch, -pitch_limit, pitch_limit)
 
                 # ===== 内环（倾角 PD → 力矩）=====
