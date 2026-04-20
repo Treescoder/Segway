@@ -71,8 +71,8 @@ class GolfLQR:
         rot = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
         euler = rot.as_euler('xyz', degrees=False)
 
-        # 关键修复：取反以匹配 euler="0 3.14 0" 的坐标系
-        self.pitch = -euler[1]
+
+        self.pitch = -euler[1]         # 取反以匹配 euler="0 3.14 0" 的坐标系
         cvel = self.data.cvel[self.body_id]
         self.pitch_dot = -cvel[4]
 
