@@ -29,7 +29,7 @@ def main():
     MAX_TORQUE = 20.0 # Nm
     start_time = time.time()
     SIM_DURATION = 50.0     # 仿真总时长（秒）
-    target_vel = 0.1 # 目标速度
+    target_vel = 0.0 # 目标速度
     kp, kd, kv, ki = 5.0, 1.0, 20, 1.0
     vel_filtered = pitch_dot_filtered = prev_pitch = step_count = 0.0
     pitch_limit, vel_int = 0.05, 0.0
@@ -42,7 +42,7 @@ def main():
 
     # ================== 打开 MuJoCo 被动可视化窗口 ==================
     with (mujoco.viewer.launch_passive(model, data) as viewer):
-        move_window_to_second_screen(10, 20, 1900, 900)
+        move_window_to_second_screen(5, 15, 1900, 900)
         cam, cam.distance, cam.elevation, cam.azimuth = viewer.cam, 2.0, -60, 120
 
         while viewer.is_running():

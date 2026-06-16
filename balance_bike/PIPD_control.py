@@ -42,8 +42,8 @@ def main():
 
     # ================== 打开 MuJoCo 被动可视化窗口 ==================
     with (mujoco.viewer.launch_passive(model, data) as viewer):
-        move_window_to_second_screen(10, 20, 1900, 900)
-        cam, cam.distance, cam.elevation, cam.azimuth = viewer.cam, 0.5, -30, 40
+        move_window_to_second_screen(10, 20, 1900, 1000)
+        cam, cam.distance, cam.elevation, cam.azimuth = viewer.cam, 0.3, -20, 45
 
         while viewer.is_running():
             if time.time() - start_time > SIM_DURATION: break

@@ -2,10 +2,10 @@ import ctypes
 import time
 
 def move_window_to_second_screen(
-        offset_x=100,
-        offset_y=10,
-        width=1000,
-        height=900):
+        offset_x=5,
+        offset_y=15,
+        width=2125,
+        height=1130):
     """
     将当前前台窗口移动到扩展屏（假设在右侧）
     """
@@ -32,7 +32,7 @@ def move_window_to_second_screen(
         return
 
     # 目标位置（右侧扩展屏）
-    x = offset_x
+    x = offset_x + primary_w
     y = offset_y
 
     # 0x0004 = SWP_NOZORDER（不改变层级）

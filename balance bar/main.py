@@ -49,7 +49,7 @@ def main():
 
     # ================== 打开 MuJoCo 被动可视化窗口 ==================
     with (mujoco.viewer.launch_passive(model, data) as viewer):
-        move_window_to_second_screen(10, 20, 1900, 900)
+        move_window_to_second_screen()
         cam, cam.distance, cam.elevation, cam.azimuth = viewer.cam, 2.0, -60, 120
 
         while viewer.is_running():
@@ -115,7 +115,7 @@ def main():
 
             mujoco.mj_step(model, data)
             step_count += 1
-            if step_count % 15 == 0:
+            if step_count % 11 == 0:
                 time.sleep(0.01)  # 固定帧率 ~100Hz
                 viewer.sync()
 
