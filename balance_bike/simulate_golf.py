@@ -129,7 +129,8 @@ class UpdateSimThread(QThread):
                     self.last_robot_update = time.monotonic_ns()
                     self.robot.set_velocity_linear_set_point(self.speed)
                     self.robot.set_yaw(self.yaw)
-                    self.robot.update_motor_torque()
+                    # self.robot.update_motor_torque()
+                    self.robot.update_motor_speed()
 
                 mujoco.mj_step(self.model, self.data)
 

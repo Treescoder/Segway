@@ -2,7 +2,7 @@
   <compiler angle="radian"/>
   <option timestep="0.000025"/>
 
-  <include file="segway.xml"/>
+  <include file="balance.xml"/>
 
   <statistic center="0 0 0.3" extent="0.3"/>
   <visual>
@@ -10,61 +10,21 @@
     <rgba haze="0.15 0.25 0.35 1"/>
     <global azimuth="120" elevation="-15" fovy="50"/>
   </visual>
+
   <asset>
-    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
-    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.5 0.6 0.7" rgb2="0.4 0.5 0.6"
-             markrgb="1 1 1" width="300" height="300"/>
-    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="100 100" reflectance="0.2"/>
-    <!-- 圆环材质 -->
-    <material name="circle_mat" rgba="0.2 0.8 0.2 0.4"/>
+    <!-- 天空盒：golf scene 的灰色渐变 -->
+    <texture type="skybox" builtin="gradient" rgb1="0.8 0.8 0.8" rgb2="0 0 0" width="512" height="3072"/>
+    <!-- 地面纹理：golf scene 的深色棋盘格 -->
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
+             rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8"
+             width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
   </asset>
+
   <worldbody>
     <light pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <!-- 地面几何体 -->
     <geom name="ground" size="0 0 0.05" type="plane" friction="1.0 1.0 0.1"
           pos="0 0 0" material="groundplane" contype="1" conaffinity="2"/>
-
-    <!-- 圆心参考柱 -->
-    <body name="center_marker" pos="0 0 0">
-      <geom type="cylinder" size="0.1 0.5" pos="0 0 0.25" rgba="1 0 0 1" contype="0" conaffinity="0"/>
-    </body>
-
-    <!-- 圆形轨迹参考线 (半径 12 米) -->
-    <body name="circle_ref" pos="0 0 0">
-      <geom type="cylinder" size="70 0.05" quat="0.707107 0 0.707107 0" material="circle_mat" contype="0" conaffinity="0"/>
-    </body>
-
-    <!-- 圆周上的彩色小球 (半径 0.15 米) -->
-    <!-- 0° 红色 -->
-    <body name="marker_0" pos="12 0 0.1">
-      <geom type="sphere" size="0.15" rgba="1 0 0 1" contype="0" conaffinity="0"/>
-    </body>
-    <!-- 45° 橙色 -->
-    <body name="marker_45" pos="8.485 8.485 0.1">
-      <geom type="sphere" size="0.15" rgba="1 0.5 0 1" contype="0" conaffinity="0"/>
-    </body>
-    <!-- 90° 黄色 -->
-    <body name="marker_90" pos="0 12 0.1">
-      <geom type="sphere" size="0.15" rgba="1 1 0 1" contype="0" conaffinity="0"/>
-    </body>
-    <!-- 135° 黄绿色 -->
-    <body name="marker_135" pos="-8.485 8.485 0.1">
-      <geom type="sphere" size="0.15" rgba="0.5 1 0 1" contype="0" conaffinity="0"/>
-    </body>
-    <!-- 180° 绿色 -->
-    <body name="marker_180" pos="-12 0 0.1">
-      <geom type="sphere" size="0.15" rgba="0 1 0 1" contype="0" conaffinity="0"/>
-    </body>
-    <!-- 225° 青色 -->
-    <body name="marker_225" pos="-8.485 -8.485 0.1">
-      <geom type="sphere" size="0.15" rgba="0 1 1 1" contype="0" conaffinity="0"/>
-    </body>
-    <!-- 270° 蓝色 -->
-    <body name="marker_270" pos="0 -12 0.1">
-      <geom type="sphere" size="0.15" rgba="0 0 1 1" contype="0" conaffinity="0"/>
-    </body>
-    <!-- 315° 紫色 -->
-    <body name="marker_315" pos="8.485 -8.485 0.1">
-      <geom type="sphere" size="0.15" rgba="0.6 0 1 1" contype="0" conaffinity="0"/>
-    </body>
   </worldbody>
 </mujoco>
