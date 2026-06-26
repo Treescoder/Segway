@@ -183,7 +183,7 @@ class UpdateSimThread(QThread):
             # 计算实际车身线速度（m/s）
             WHEEL_RADIUS = 0.034
             # 注意左轮轴反向，所以取 -l_vel
-            avg_wheel_vel = (-l_vel + r_vel) / 2.0
+            avg_wheel_vel = (-1 * l_vel + r_vel) / 2.0
             actual_speed = avg_wheel_vel
 
             # 4. 打印所有信息

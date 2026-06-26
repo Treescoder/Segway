@@ -139,7 +139,7 @@ class UpdateSimThread(QThread):
             r_ctrl = self.data.ctrl[1]
 
             WHEEL_RADIUS = 0.1275
-            actual_speed = (l_vel + r_vel) / 2.0 * WHEEL_RADIUS
+            actual_speed = (l_vel + r_vel) / 2.0
 
             print(f"[t={self.data.time:.2f}s] "
                   f"pitch={pitch:6.2f}° roll={roll:6.2f}° yaw={yaw:6.2f}° | "

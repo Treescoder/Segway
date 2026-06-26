@@ -19,14 +19,14 @@
             <body name="wheel_axle" pos="0 0 0.03">
                 <inertial pos="0.0 0.0 0.0" quat="0.707107 0 0 0.707107"
                           mass="40.489" diaginertia="0.87993 0.64149 0.31774"/>
-                <geom type="box" size="0.3 0.05 0.02" material="body_material"/>
+                <geom type="box" size="0.3 0.12 0.02" material="body_material"/>
             </body>
 
             <!-- 倒立杆 -->
             <body name="pendulum" pos="0 0 0.05">
                 <inertial pos="0.0 0.0 0.0" quat="0.707107 0 0 0.707107"
                           mass="20.48164" diaginertia="0.75267 0.672276 0.0894829"/>
-                <geom type="cylinder" size="0.015 0.35" pos="0 0.05 0.35" material="body_material"/>
+                <geom type="cylinder" size="0.015 0.35" pos="0 0.09 0.35" material="body_material"/>
             </body>
 
             <!-- 左轮 -->

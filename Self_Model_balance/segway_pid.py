@@ -10,8 +10,8 @@ PITCH_KP = 3.0
 PITCH_KD = 1.1
 
 # 速度控制参数
-SPEED_KP = 1.3
-SPEED_KI = 0.15
+SPEED_KP = 2.3
+SPEED_KI = 0.35
 SPEED_INT_LIMIT = 0.8
 
 # 偏航控制参数
@@ -35,6 +35,7 @@ class SegwayPID:
         self.velocity_angular_filtered = 0.0
         self.roll_dot_filtered = 0.0
         self.speed_error_integral = 0.0
+        self.target_pitch_dynamic = 0.0
 
         # 模型关键 ID
         self.body_id = model.body('segway').id
@@ -106,8 +107,10 @@ class SegwayPID:
         self.speed_error_integral += vel_error * 0.005
         self.speed_error_integral = clamp(self.speed_error_integral, -SPEED_INT_LIMIT, SPEED_INT_LIMIT)
 
-        target_pitch = SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral
-        pitch_error = target_pitch - self.last_pitch
+        # 计算目标俯仰角
+        target_pitch = 0.5 * (SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral)
+        self.target_pitch_dynamic = 0.9 * self.target_pitch_dynamic + 0.1 * target_pitch # 对目标俯仰角做低通滤波（使用成员变量）
+        pitch_error = self.target_pitch_dynamic - self.last_pitch
 
         motor_vel = PITCH_KP * pitch_error - PITCH_KD * self.pitch_dot_filtered
 
