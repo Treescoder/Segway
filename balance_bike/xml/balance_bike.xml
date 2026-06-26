@@ -37,8 +37,14 @@
         </body>
     </worldbody>
 
-    <actuator>
-        <motor name="left_motor" joint="lunL" gear="1" ctrllimited="true" ctrlrange="-5 5"/>
-        <motor name="right_motor" joint="lunR" gear="1" ctrllimited="true" ctrlrange="-5 5"/>
+<!--    <actuator> # 力矩控制-->
+<!--        <motor name="left_motor" joint="lunL" gear="1" ctrllimited="true" ctrlrange="-5 5"/>-->
+<!--        <motor name="right_motor" joint="lunR" gear="1" ctrllimited="true" ctrlrange="-5 5"/>-->
+<!--    </actuator>-->
+
+    <actuator> # 速度控制
+        <velocity name="left_motor" joint="lunL" gear="1" kv="0.9" ctrllimited="true" ctrlrange="-200 200"/>
+        <velocity name="right_motor" joint="lunR" gear="1" kv="0.9" ctrllimited="true" ctrlrange="-200 200"/>
     </actuator>
+
 </mujoco>

@@ -11,8 +11,8 @@ from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtGui import QGuiApplication, QSurfaceFormat
 from PySide6.QtOpenGL import QOpenGLWindow
 
-from balance_bike.golf_LQR import GolfLQR
-
+# from balance_bike.golf_LQR import GolfLQR
+from balance_bike.golf_PIPD_turn import GolfPID
 # 轮子半径（与 golf_LQR.py 中的 r_wheel 一致）
 WHEEL_RADIUS = 0.0672 / 2
 
@@ -104,7 +104,7 @@ class UpdateSimThread(QThread):
         self.data = data
         self.running = True
 
-        self.robot = GolfLQR(model, data)
+        self.robot = GolfPID(model, data)
 
         self.speed = 0.0
         self.yaw = 0.0

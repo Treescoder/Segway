@@ -48,8 +48,6 @@ class GolfLQR:
         self.model = model
         self.data = data
 
-        self.x = 0.0
-        self.x_dot = 0.0
         self.pitch = 0.0
         self.pitch_dot = 0.0
 

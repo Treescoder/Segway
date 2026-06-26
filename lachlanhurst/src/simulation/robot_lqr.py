@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation
 
 # obtained from running `calculate_lqr_gains.py`
 LQR_K = [-30.1402165848237837, -0.03501370844016172, 5.9748026764525894e-18,6.236067977499789] # K0:pitch, K1:pitch_dot, K2:0, K3:V_err
+# LQR_K = [ -2.1402165848237864, -0.0350137084401619, -2.803441794572757e-17, 2.2360679774997916] # 原来的参数
 WHEEL_RADIUS = 0.034
 MAX_MOTOR_VEL = 500.0 # rad/s
 

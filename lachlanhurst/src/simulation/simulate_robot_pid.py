@@ -16,8 +16,9 @@ from PySide6.QtGui import (
 )
 import time
 
-from lachlanhurst.src.simulation.robot_lqr import RobotLqr
+# from lachlanhurst.src.simulation.robot_lqr import RobotLqr
 
+from lachlanhurst.src.simulation.robot_pid import RobotPID
 
 format = QSurfaceFormat()
 format.setDepthBufferSize(24)
@@ -112,7 +113,8 @@ class UpdateSimThread(QThread):
         self.data = data
         self.running = True
 
-        self.robot = RobotLqr(model, data)
+        self.robot = RobotPID(model, data)
+        # self.robot = RobotLqr(model, data)
 
         # robot control parameters
         self.speed = 0.0
@@ -166,47 +168,30 @@ class UpdateSimThread(QThread):
         try:
             # 1. 四元数转欧拉角 (ZYX 顺序: yaw, pitch, roll)
             quat = self.data.xquat[self.body_id]  # [w,x,y,z]
-            # 使用 scipy 的 Rotation 转换（需要安装 scipy，如果没有可以手动计算）
-            try:
-                from scipy.spatial.transform import Rotation as R
-                r = R.from_quat([quat[1], quat[2], quat[3], quat[0]])  # [x,y,z,w] 顺序
-                euler = r.as_euler('zyx', degrees=True)  # 返回 [yaw, pitch, roll] 角度制
-                yaw, pitch, roll = euler
-            except ImportError:
-                # 手动计算 (ZYX 顺序, 使用常见公式)
-                qw, qx, qy, qz = quat
-                # roll (x轴旋转)
-                sinr_cosp = 2 * (qw * qx + qy * qz)
-                cosr_cosp = 1 - 2 * (qx * qx + qy * qy)
-                roll = np.arctan2(sinr_cosp, cosr_cosp)
-                # pitch (y轴旋转)
-                sinp = 2 * (qw * qy - qz * qx)
-                pitch = np.arcsin(np.clip(sinp, -1, 1))
-                # yaw (z轴旋转)
-                siny_cosp = 2 * (qw * qz + qx * qy)
-                cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
-                yaw = np.arctan2(siny_cosp, cosy_cosp)
-                roll, pitch, yaw = np.degrees([roll, pitch, yaw])
+            from scipy.spatial.transform import Rotation as R
+            r = R.from_quat([quat[1], quat[2], quat[3], quat[0]])  # [x,y,z,w] 顺序
+            euler = r.as_euler('zyx', degrees=True)  # 返回 [yaw, pitch, roll] 角度制
+            yaw, pitch, roll = euler
 
             # 2. 车轮角速度和实际电机扭矩
             l_vel = self.data.qvel[self.l_joint_id]
             r_vel = self.data.qvel[self.r_joint_id]
             l_torque = self.data.actuator_force[0]  # 实际执行器力
             r_torque = self.data.actuator_force[1]
-
-            # 3. LQR 计算的目标控制量（通常是电机速度或力）
-            #    如果 RobotLqr 有公开的控制变量，例如 self.robot.motor_speed 或 self.robot.torque
-            #    如果没有，可以打印 MuJoCo 中的 ctrl 数组（执行器控制输入）
-            #    假设执行器控制输入存储在 data.ctrl[0] 和 data.ctrl[1]
             l_ctrl = self.data.ctrl[0]  # 左电机目标速度/力
             r_ctrl = self.data.ctrl[1]  # 右电机目标速度/力
+            # 计算实际车身线速度（m/s）
+            WHEEL_RADIUS = 0.034
+            # 注意左轮轴反向，所以取 -l_vel
+            avg_wheel_vel = (-l_vel + r_vel) / 2.0
+            actual_speed = avg_wheel_vel
 
             # 4. 打印所有信息
             print(f"[t={self.data.time:.2f}s] "
                   f"pitch={pitch:6.2f}° roll={roll:6.2f}° yaw={yaw:6.2f}° | "
-                  f"L: vel={l_vel:6.2f} rad/s, torque={l_torque:6.2f}, ctrl={l_ctrl:6.2f} | "
-                  f"R: vel={r_vel:6.2f} rad/s, torque={r_torque:6.2f}, ctrl={r_ctrl:6.2f} | "
-                  f"Target: speed={self.speed:5.2f}, yaw={self.yaw:5.2f}")
+                  f"actual_speed={actual_speed:6.2f} m/s | target_speed={self.speed:5.2f} m/s | "
+                  f"L: {l_vel:6.2f} rad/s, ctrl={l_ctrl:6.2f} | "
+                  f"R: {r_vel:6.2f} rad/s, ctrl={r_ctrl:6.2f}")
         except Exception as e:
             print(f"Debug print error: {e}")
 

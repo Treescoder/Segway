@@ -18,7 +18,7 @@ def main():
     # ================== ID 获取 ==================
     motor_l_wheel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_l_wheel")
     motor_r_wheel = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "motor_r_wheel")
-    robot_body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot_body")
+    body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot_body")
 
     # ================== 仿真参数 ==================
     WHEEL_RADIUS = 0.034
