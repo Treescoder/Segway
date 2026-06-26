@@ -1,18 +1,16 @@
 import math
-
 import mujoco
 import numpy as np
 from scipy.spatial.transform import Rotation
 
 # obtained from running `calculate_lqr_gains.py`
-LQR_K = [-2.1402165848237837, -0.03501370844016172, 5.9748026764525894e-18, 2.236067977499789]
+LQR_K = [-30.1402165848237837, -0.03501370844016172, 5.9748026764525894e-18,6.236067977499789] # K0:pitch, K1:pitch_dot, K2:0, K3:V_err
+# LQR_K = [-2.1402165848237837, -0.03501370844016172, 5.9748026764525894e-18, 2.236067977499789]
 WHEEL_RADIUS = 0.034
 MAX_MOTOR_VEL = 500.0 # rad/s
 
-
 def clamp(n, minn, maxn):
     return max(min(maxn, n), minn)
-
 
 """
 Basic LQR controller implementation

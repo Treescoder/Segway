@@ -14,18 +14,18 @@
         <body name="segway" pos="0 0 0.09">
             <joint name="segway_free" type="free" damping="0.5"/>
 
-            <!-- 骑手 -->
-            <body name="rider_left" pos="0.16 0 0.60">
-                <inertial pos="0 0 0" mass="40" diaginertia="0.8 0.8 0.8"/>
-                <joint name="rider_left" type="slide" axis="0 1 0" limited="true" range="-0.000000001 0"/>
-                <geom type="sphere" size="0.05" rgba="0 0 0 1"/>
-            </body>
+<!--            &lt;!&ndash; 骑手 &ndash;&gt;-->
+<!--            <body name="rider_left" pos="0.16 0 0.60">-->
+<!--                <inertial pos="0 0 0" mass="40" diaginertia="0.8 0.8 0.8"/>-->
+<!--                <joint name="rider_left" type="slide" axis="0 1 0" limited="true" range="-0.000000001 0"/>-->
+<!--                <geom type="sphere" size="0.05" rgba="0 0 0 1"/>-->
+<!--            </body>-->
 
-            <body name="rider_right" pos="-0.16 0 0.60">
-                <inertial pos="0 0 0" mass="40" diaginertia="0.8 0.8 0.8"/>
-                <joint name="rider_right" type="slide" axis="0 1 0" limited="true" range="-0.000000001 0"/>
-                <geom type="sphere" size="0.05" rgba="0 0 0 1"/>
-            </body>
+<!--            <body name="rider_right" pos="-0.16 0 0.60">-->
+<!--                <inertial pos="0 0 0" mass="40" diaginertia="0.8 0.8 0.8"/>-->
+<!--                <joint name="rider_right" type="slide" axis="0 1 0" limited="true" range="-0.000000001 0"/>-->
+<!--                <geom type="sphere" size="0.05" rgba="0 0 0 1"/>-->
+<!--            </body>-->
 
             <!-- 轮轴杆：加厚、加重，降低重心 -->
             <body name="wheel_axle" pos="0 0 0.03">

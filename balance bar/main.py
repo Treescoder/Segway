@@ -88,7 +88,7 @@ def main():
                 pitch_dot_filtered = (pitch_dot_filtered * .9) + (pitch_dot * .1)
                 vel_filtered = (vel_filtered * .975) + (v_forward * .025)
 
-                torque = - kp * pitch - kd * pitch_dot + kv * (1.0 - vel_filtered)
+                torque = - kp * pitch - kd * pitch_dot + kv * (5.0 - vel_filtered)
                 torque = np.clip(torque, -MAX_TORQUE, MAX_TORQUE)
 
                 data.ctrl[motor_l_wheel] = torque

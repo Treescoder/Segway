@@ -14,10 +14,8 @@ from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtGui import (
     QGuiApplication, QSurfaceFormat
 )
-import time
 
 from robot_lqr import RobotLqr
-
 
 format = QSurfaceFormat()
 format.setDepthBufferSize(24)
@@ -29,7 +27,6 @@ format.setVersion(2,0)
 format.setRenderableType(QSurfaceFormat.RenderableType.OpenGL)
 format.setProfile(QSurfaceFormat.CompatibilityProfile)
 QSurfaceFormat.setDefaultFormat(format)
-
 
 class Viewport(QOpenGLWindow):
 
@@ -98,7 +95,6 @@ class Viewport(QOpenGLWindow):
         self.runtime.append(time.time()-t)
         self.updateRuntime.emit(np.average(self.runtime))
 
-
 class UpdateSimThread(QThread):
 
     def __init__(self, model: mujoco.MjModel, data: mujoco.MjData, parent=None) -> None:
@@ -163,7 +159,7 @@ class Window(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
 
-        self.model = mujoco.MjModel.from_xml_path(str(pathlib.Path(__file__).parent.joinpath('scene.xml')))
+        self.model = mujoco.MjModel.from_xml_path(str(pathlib.Path(__file__).parent.joinpath('xml/scene.xml')))
         self.data = mujoco.MjData(self.model)
         self.cam = self.create_free_camera()
         self.opt = mujoco.MjvOption()
