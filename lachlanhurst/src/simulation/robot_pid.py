@@ -7,7 +7,7 @@ WHEEL_RADIUS = 0.034
 MAX_MOTOR_VEL = 200.0          # 与 XML ctrlrange 一致
 
 # PID 参数（仅俯仰平衡）
-PITCH_KP = 8.0               # 比例增益
+PITCH_KP = 8.0              # 比例增益: 放大会让俯仰角在加减速的时候也保持小角度平衡，但是速度跟踪不上，始终有误差；现在这个值可以很好的跟踪速度，但是转弯转的太急可能会抖
 PITCH_KD = 1.1              # 微分阻尼
 SPEED_KP = 0.3              # 暂不加入速度控制
 SPEED_KI = 0.01
