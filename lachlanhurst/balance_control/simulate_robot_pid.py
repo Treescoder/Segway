@@ -14,9 +14,6 @@ from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtGui import (
     QGuiApplication, QSurfaceFormat
 )
-import time
-
-# from lachlanhurst.src.simulation.robot_lqr import RobotLqr
 
 from lachlanhurst.balance_control.robot_pid import RobotPID
 
@@ -183,7 +180,7 @@ class UpdateSimThread(QThread):
             # 计算实际车身线速度（m/s）
             WHEEL_RADIUS = 0.034
             # 注意左轮轴反向，所以取 -l_vel
-            avg_wheel_vel = (-l_vel + r_vel) / 2.0
+            avg_wheel_vel = (-1 * l_vel + r_vel) / 2.0
             actual_speed = avg_wheel_vel
 
             # 4. 打印所有信息
@@ -222,11 +219,12 @@ class Window(QMainWindow):
         self.cam = self.create_free_camera()
         self.opt = mujoco.MjvOption()
         self.scn = mujoco.MjvScene(self.model, maxgeom=10000)
-        self.scn.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = True
-        self.scn.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = True
+        self.scn.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
+        self.scn.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = False
         self.viewport = Viewport(self.model, self.data, self.cam, self.opt, self.scn)
         self.viewport.setScreenScale(QGuiApplication.instance().primaryScreen().devicePixelRatio())
         self.viewport.updateRuntime.connect(self.show_runtime)
+        self.move(200, 50)
 
         layout = QVBoxLayout()
         layout_top = QHBoxLayout()
@@ -309,8 +307,8 @@ class Window(QMainWindow):
         cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         cam.fixedcamid = -1
         cam.lookat = np.array([ 0.0 , 0.0 , 0.0 ])
-        cam.distance = self.model.stat.extent * 2
-        cam.elevation = -25
+        cam.distance = self.model.stat.extent * 3
+        cam.elevation = -30
         cam.azimuth = 45
         return cam
 

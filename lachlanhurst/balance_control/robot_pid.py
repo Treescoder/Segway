@@ -7,9 +7,9 @@ WHEEL_RADIUS = 0.034
 MAX_MOTOR_VEL = 200.0          # 与 XML ctrlrange 一致
 
 # PID 参数（仅俯仰平衡）
-PITCH_KP = 25.0               # 比例增益
+PITCH_KP = 10.0               # 比例增益
 PITCH_KD = 1.1              # 微分阻尼
-SPEED_KP = 0.2              # 暂不加入速度控制
+SPEED_KP = 0.3              # 暂不加入速度控制
 SPEED_KI = 0.01
 INTEGRAL_LIMIT = 0.1
 
