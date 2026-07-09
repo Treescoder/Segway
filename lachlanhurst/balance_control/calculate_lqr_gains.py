@@ -9,24 +9,25 @@ g = 9.81  # acceleration due to gravity (m/s^2)
 # robot physical parameters
 # these parameters need to match that included in the robot model
 # definition (robot-02.urdf)
-m = 0.578   # total mass (kg)
+m = 0.514   # 摆杆的质量
+M = 0.064   # 轮子 代表小车主体的质量
 l = 0.023   # length to the center of mass from wheel axis (m)
 r = 0.034  # Wheel radius (m)
 max_velocity = 1.0  # Maximum velocity corresponding to full stick input
 THROTTLE_GAIN = 1.0  # Mapping LQR control output to Throttle input
 
 A = np.array([[0, 1, 0, 0],
-              [g/l, 0, 0, 0],
+              [(g/l)*(M+m)/M, 0, 0, 0],
               [0, 0, 0, 1],
-              [-g/m, 0, 0, 0]])
+              [-(g * m)/M, 0, 0, 0]])
 
 B = np.array([[0],
-              [- 1 / (m * (l ** 2))],
+              [- 1 / (M * l ** 2)],
               [0],
-              [ 1 / m]])
+              [ 1 / M]])
 
 # Weighting matrices
-Q = np.diag([0.7, 0.0, 0.0, 2.5])  # Penalizing theta, theta_dot, x, and x_dot
+Q = np.diag([5.0, 0.0, 0.0, 2.5])  # Penalizing theta, theta_dot, x, and x_dot
 R = np.array([[0.5]]) # Penalizing control effort
 
 # Calculate the LQR gain matrix K

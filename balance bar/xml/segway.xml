@@ -12,7 +12,7 @@
     <option gravity="0 0 -9.81" viscosity="0.002"/>
     <worldbody>
         <body name="segway" pos="0 0 0.09">
-            <joint name="segway_free" type="free" damping="0.5"/>
+            <joint name="segway_free" type="free" damping="0.05"/>
 
             <!-- 轮轴杆：加厚、加重，降低重心 -->
             <body name="wheel_axle" pos="0 0 0.03">

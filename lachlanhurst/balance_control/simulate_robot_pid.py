@@ -147,7 +147,7 @@ class UpdateSimThread(QThread):
                     self.robot.set_velocity_linear_set_point(self.speed)
                     self.robot.set_yaw(self.yaw)
                     # update motor speed with LQR controller
-                    self.robot.update_motor_speed()
+                    self.robot.update_motor_torque()
 
                 # step the simulation
                 mujoco.mj_step(self.model, self.data)
