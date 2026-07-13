@@ -2,7 +2,10 @@
   <compiler angle="radian"/>
   <option timestep="0.000025"/>
 
-  <include file="balance.xml"/>
+<!--  <include file="balance.xml"/>--> # 无球包
+<!--  <include file="balance_ball_and_human.xml"/> # 球包和人一起平衡-->
+  <include file="balance_ball_follow.xml"/> # 有球包，跟踪人平衡
+
 
   <statistic center="0 0 0.3" extent="0.3"/>
   <visual>

@@ -19,19 +19,16 @@
         <body name="segway" pos="0 0 0.09">
             <joint name="segway_free" type="free" damping="0.5"/>
 
-            <!-- 轮轴杆 -->
             <body name="wheel_axle" pos="0 0 0.03">
                 <inertial pos="0.0 -0.09 0.0" quat="0.707107 0 0 0.707107"
                           mass="40.489" diaginertia="0.87993 0.64149 0.31774"/>
                 <geom type="box" size="0.3 0.12 0.02" material="body_material"/>
             </body>
 
-            <!-- 倒立杆（车把），整体绕 X 轴向后倾斜 5 度，子元素居中对齐 -->
-            <body name="pendulum" pos="0 0 0.05" quat="0.999657 0.026177 0 0">
+            <body name="pendulum" pos="0 0 0.05">
                 <inertial pos="0.0 0.0 0.0" quat="0.707107 0 0 0.707107"
-                          mass="5.48164" diaginertia="0.75267 0.672276 0.0894829"/>
-                <!-- 圆柱体位于中心，沿 Z 轴向上 -->
-                <geom type="cylinder" size="0.015 0.35" pos="0 0.06 0.35" material="body_material"/>
+                          mass="10.48164" diaginertia="0.75267 0.672276 0.0894829"/>
+                <geom type="cylinder" size="0.015 0.35" pos="0 0.05 0.35" material="body_material"/>
 
                 <!-- 高尔夫球包，居中，位于倒立杆顶端 -->
                 <body name="golf_bag" pos="0 0.2 0.35">
@@ -41,21 +38,6 @@
                 </body>
             </body>
 
-<!--            &lt;!&ndash; 倒立杆（车把） &ndash;&gt;--> # 竖直倒立杆
-<!--            <body name="pendulum" pos="0 0 0.05">-->
-<!--                <inertial pos="0.0 0.0 0.0" quat="0.707107 0 0 0.707107"-->
-<!--                          mass="10.48164" diaginertia="0.75267 0.672276 0.0894829"/>-->
-<!--                <geom type="cylinder" size="0.015 0.35" pos="0 0.08 0.35" material="body_material"/>-->
-
-<!--                &lt;!&ndash; 高尔夫球包 &ndash;&gt;-->
-<!--                <body name="golf_bag" pos="0 0.243 0.30">-->
-<!--                    <inertial pos="0 0 0" mass="15.0"-->
-<!--                              diaginertia="1.8 1.8 0.225"/>-->
-<!--                    <geom type="cylinder" size="0.15 0.3" material="bag_material"/>-->
-<!--                </body>-->
-<!--            </body>-->
-
-            <!-- 左轮 -->
             <body name="l_wheel" pos="-0.25 0 0.034">
                 <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5"
                           mass="4.23004" diaginertia="0.01832 0.010662 0.0105854"/>
@@ -64,7 +46,6 @@
                       material="wheel_material" contype="2" conaffinity="1" friction="2 1 0.8"/>
             </body>
 
-            <!-- 右轮 -->
             <body name="r_wheel" pos="0.25 0 0.034">
                 <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5"
                           mass="4.23004" diaginertia="0.01832 0.010662 0.0105854"/>
@@ -73,12 +54,10 @@
                       material="wheel_material" contype="2" conaffinity="1" friction="2 1 0.8"/>
             </body>
         </body>
-
-        <!-- 可添加行人 mocap（调试时按需取消注释） -->
     </worldbody>
 
     <actuator>
-        <velocity name="motor_l_wheel" joint="torso_l_wheel" kv="0.9" ctrlrange="-100 100" ctrllimited="true"/>
-        <velocity name="motor_r_wheel" joint="torso_r_wheel" kv="0.9" ctrlrange="-100 100" ctrllimited="true"/>
+        <motor name="motor_l_wheel" joint="torso_l_wheel" gear="1" ctrllimited="true" ctrlrange="-800 800"/>
+        <motor name="motor_r_wheel" joint="torso_r_wheel" gear="1" ctrllimited="true" ctrlrange="-800 800"/>
     </actuator>
 </mujoco>

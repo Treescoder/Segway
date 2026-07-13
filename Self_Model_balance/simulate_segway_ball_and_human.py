@@ -218,8 +218,8 @@ class Window(QMainWindow):
         label_width = 60
         speed_layout = QHBoxLayout()
         self.speed_slider = QSlider(Qt.Horizontal)
-        self.speed_slider.setMinimum(-4 * 1000)
-        self.speed_slider.setMaximum(4 * 1000)
+        self.speed_slider.setMinimum(-4.16 * 1000)
+        self.speed_slider.setMaximum(4.16 * 1000)
         self.speed_slider.setValue(0)
         self.speed_slider.valueChanged.connect(self._speed_changed)
         speed_label = QLabel("Speed")

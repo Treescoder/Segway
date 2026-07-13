@@ -1,31 +1,24 @@
-# segway_ball_pid.py —— 串级 PID 平衡控制器（修正初始化 + 方向可调 + 前馈）
-import math
+# segway_ball_pid.py —— 原始力矩环平衡控制器（无任何修改）
 import numpy as np
 import mujoco
 from scipy.spatial.transform import Rotation
 
 WHEEL_RADIUS = 0.1275
-MAX_MOTOR_VEL = 100.0          # 轮速限制 (rad/s)
-WHEEL_BASE = 0.5               # 轮距 (m)
+MAX_TORQUE = 800.0
 
-# ★★★ 方向常量 ★★★
-WHEEL_DIRECTION = 1    # 正轮速对应前进：给左右轮正速度，若前进则 1，若后退则 -1
-BALANCE_SIGN = -1      # 角度环输出符号，如果纠正方向反了就改这个
-PITCH_SIGN = -1        # 使前倾为正（若前倾时 get_pitch() 为负，则设 -1）
-
-# 前馈速度偏置 (rad/s)，正值表示向前，用于补偿倾斜引起的重力矩
-FEEDFORWARD_VEL = 0.0
-
-# ---------- PID 参数 ----------
 PITCH_KP = 70.0
-PITCH_KD = 50
-PITCH_KI = 0.0
+PITCH_KD = 100.0
+PITCH_KI = 6.0
+PITCH_INT_LIMIT = 6.0
 
-SPEED_KP = 0.1
-SPEED_KI = 0.01
-INTEGRAL_LIMIT = 0.5
+SPEED_KP = 3.0
+SPEED_KI = 0.2
+SPEED_INT_LIMIT = 5.0
 
-YAW_TO_WHEEL_DIFF = WHEEL_BASE / (2 * WHEEL_RADIUS)
+FEEDFORWARD_TORQUE = -30.0
+
+YAW_DEADZONE = 0.01
+YAW_GAIN = 1.0
 
 def clamp(n, minn, maxn):
     return max(min(maxn, n), minn)
@@ -34,19 +27,25 @@ class SegwayPID:
     def __init__(self, model, data):
         self.model = model
         self.data = data
-
         self.velocity_linear_set_point = 0.0
         self.yaw = 0.0
-        self.pitch_dot_filtered = 0.0
-        self.velocity_angular_filtered = 0.0
+
+        self.pitch_integral = 0.0
         self.speed_error_integral = 0.0
+        self.filtered_wheel_vel = 0.0
+
         self.body_id = model.body('segway').id
+        self.l_dof = model.jnt_dofadr[model.joint('torso_l_wheel').id]
+        self.r_dof = model.jnt_dofadr[model.joint('torso_r_wheel').id]
 
     def set_velocity_linear_set_point(self, vel):
         self.velocity_linear_set_point = vel
 
     def set_yaw(self, yaw):
-        self.yaw = yaw
+        if abs(yaw) < YAW_DEADZONE:
+            self.yaw = 0.0
+        else:
+            self.yaw = yaw * YAW_GAIN
 
     def get_pitch(self) -> float:
         quat = self.data.xquat[self.body_id]
@@ -59,56 +58,53 @@ class SegwayPID:
         angular = self.data.joint('segway_free').qvel[-3:]
         return angular[0]
 
+    def get_roll(self) -> float:
+        quat = self.data.xquat[self.body_id]
+        if quat[0] == 0:
+            return 0.0
+        rot = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
+        return rot.as_euler('xyz', degrees=False)[1]
+
     def get_wheel_velocity_avg(self) -> float:
-        l_vel = self.data.joint('torso_l_wheel').qvel[0]
-        r_vel = self.data.joint('torso_r_wheel').qvel[0]
-        return (l_vel + r_vel) / 2.0 * WHEEL_DIRECTION
+        return (self.data.qvel[self.l_dof] + self.data.qvel[self.r_dof]) / 2.0
 
-    def calculate_motor_velocity(self) -> float:
-        pitch = PITCH_SIGN * self.get_pitch()
+    def update_motor_torque(self):
+        pitch = self.get_pitch()
         pitch_dot = self.get_pitch_dot()
+        roll = self.get_roll()
+        wheel_vel = self.get_wheel_velocity_avg()
 
-        self.pitch_dot_filtered = 0.975 * self.pitch_dot_filtered + 0.025 * pitch_dot
-        wheel_avg = self.get_wheel_velocity_avg()
-        self.velocity_angular_filtered = 0.975 * self.velocity_angular_filtered + 0.025 * wheel_avg
+        self.filtered_wheel_vel = 0.9 * self.filtered_wheel_vel + 0.1 * wheel_vel
 
-        actual_linear_speed = self.velocity_angular_filtered * WHEEL_RADIUS
-        vel_error = actual_linear_speed - self.velocity_linear_set_point
+        pitch_error = 0.0 - pitch
+        self.pitch_integral += pitch_error * 0.005
+        self.pitch_integral = clamp(self.pitch_integral, -PITCH_INT_LIMIT, PITCH_INT_LIMIT)
+        torque_balance = PITCH_KP * pitch_error - PITCH_KD * pitch_dot + PITCH_KI * self.pitch_integral
+
+        actual_speed = self.filtered_wheel_vel * WHEEL_RADIUS
+        vel_error = actual_speed - self.velocity_linear_set_point
         self.speed_error_integral += vel_error * 0.005
-        self.speed_error_integral = clamp(self.speed_error_integral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT)
-        target_pitch = SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral
+        self.speed_error_integral = clamp(self.speed_error_integral, -SPEED_INT_LIMIT, SPEED_INT_LIMIT)
+        speed_correction = (SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral) * 15.0
 
-        pitch_error = target_pitch - pitch
-        motor_rad_s = PITCH_KP * pitch_error - PITCH_KD * self.pitch_dot_filtered
+        total_torque = torque_balance + speed_correction + FEEDFORWARD_TORQUE
 
-        motor_rad_s *= BALANCE_SIGN
-        motor_vel = motor_rad_s / WHEEL_RADIUS
-        motor_vel += FEEDFORWARD_VEL
-        return motor_vel
+        wheel_base = 0.25 * 2
+        yaw_diff = self.yaw * wheel_base / (2 * WHEEL_RADIUS) * 5.0
 
-    def update_motor_speed(self):
-        vel = self.calculate_motor_velocity()
-        vel = clamp(vel, -MAX_MOTOR_VEL, MAX_MOTOR_VEL)
+        left_torque = clamp(total_torque - yaw_diff, -MAX_TORQUE, MAX_TORQUE)
+        right_torque = clamp(total_torque + yaw_diff, -MAX_TORQUE, MAX_TORQUE)
 
-        left_vel = vel * WHEEL_DIRECTION
-        right_vel = vel * WHEEL_DIRECTION
-
-        yaw_diff = self.yaw * YAW_TO_WHEEL_DIFF
-        left_vel -= yaw_diff
-        right_vel += yaw_diff
-
-        left_vel = clamp(left_vel, -MAX_MOTOR_VEL, MAX_MOTOR_VEL)
-        right_vel = clamp(right_vel, -MAX_MOTOR_VEL, MAX_MOTOR_VEL)
-
-        self.data.actuator('motor_l_wheel').ctrl = [left_vel]
-        self.data.actuator('motor_r_wheel').ctrl = [right_vel]
+        self.data.actuator('motor_l_wheel').ctrl[0] = left_torque
+        self.data.actuator('motor_r_wheel').ctrl[0] = right_torque
 
     def reset(self):
-        self.pitch_dot_filtered = 0.0
-        self.velocity_angular_filtered = 0.0
+        self.pitch_integral = 0.0
         self.speed_error_integral = 0.0
-        self.velocity_linear_set_point = 0.0
-        self.yaw = 0.0
-        self.data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]
+        self.filtered_wheel_vel = 0.0
+        init_pitch = 0.0
+        qx = np.sin(init_pitch / 2.0)
+        qw = np.cos(init_pitch / 2.0)
+        self.data.qpos[3:7] = [qw, qx, 0.0, 0.0]
         self.data.actuator('motor_l_wheel').ctrl = [0]
         self.data.actuator('motor_r_wheel').ctrl = [0]
