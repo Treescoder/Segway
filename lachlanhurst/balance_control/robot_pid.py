@@ -1,7 +1,21 @@
+import math
+import numpy as np
+import mujoco
 from scipy.spatial.transform import Rotation
+
+WHEEL_RADIUS = 0.034
+MAX_MOTOR_VEL = 200.0          # 与 XML ctrlrange 一致
+
+# PID 参数（仅俯仰平衡）
+PITCH_KP = 20.0              # 比例增益: 放大会让俯仰角在加减速的时候也保持小角度平衡，但是速度跟踪不上，始终有误差；现在这个值可以很好的跟踪速度，但是转弯转的太急可能会抖
+PITCH_KD = 1.1              # 微分阻尼
+SPEED_KP = 0.3              # 暂不加入速度控制
+SPEED_KI = 0.01
+INTEGRAL_LIMIT = 0.1
 
 def clamp(n, minn, maxn):
     return max(min(maxn, n), minn)
+
 
 class RobotPID:
     def __init__(self, model, data):
@@ -14,38 +28,14 @@ class RobotPID:
         self.velocity_angular_filtered = 0.0
         self.speed_error_integral = 0.0
 
-        # Pitch PD参数
-        self.pitch_kp = 10.0
-        self.pitch_kd = 0.01
-
-        # Speed PI参数
-        self.speed_kp = 1.0
-        self.speed_ki = 0.01
-
-        self.INTEGRAL_LIMIT = 1.0
-        self.WHEEL_RADIUS = 0.034
-        self.MAX_MOTOR_TORQUE = 2.0
-
         self.body_id = model.body('robot_body').id
         self.free_dofadr = model.jnt_dofadr[model.joint('robot_body_joint').id]
 
     def set_velocity_linear_set_point(self, vel):
-        self.velocity_linear_set_point = vel       # 目标车体前进线速度
+        self.velocity_linear_set_point = vel
 
     def set_yaw(self, yaw):
-        self.yaw = yaw
-
-    def set_pitch_kp(self, kp):
-        self.pitch_kp = kp
-
-    def set_pitch_kd(self, kd):
-        self.pitch_kd = kd
-
-    def set_speed_kp(self, kv):
-        self.speed_kp = kv
-
-    def set_speed_ki(self, ki):
-        self.speed_ki = ki
+        self.yaw = yaw   # 稍后可以用，但先设为0
 
     # ---------- 俯仰角获取----------
     def get_pitch(self) -> float:
@@ -66,7 +56,7 @@ class RobotPID:
         r_vel = self.data.joint('torso_r_wheel').qvel[0]
         return (l_vel * -1 + r_vel) / 2.0    # 左轮取反
 
-    def calculate_motor_torque(self) -> float:
+    def calculate_motor_velocity(self) -> float:
         pitch = -self.get_pitch()            # 与原 LQR 一致：前倾时 pitch 为正
         pitch_dot = self.get_pitch_dot()
 
@@ -75,33 +65,33 @@ class RobotPID:
         self.velocity_angular_filtered = 0.975 * self.velocity_angular_filtered + 0.025 * self.get_wheel_velocity_avg()
 
         # 速度误差
-        vel_error = self.velocity_angular_filtered * self.WHEEL_RADIUS - self.velocity_linear_set_point
+        vel_error = self.velocity_angular_filtered * WHEEL_RADIUS - self.velocity_linear_set_point
         self.speed_error_integral += vel_error * 0.005
-        self.speed_error_integral = clamp(self.speed_error_integral, -self.INTEGRAL_LIMIT, self.INTEGRAL_LIMIT)
-        target_pitch = self.speed_kp * vel_error + self.speed_ki * self.speed_error_integral
+        self.speed_error_integral = clamp(self.speed_error_integral, -INTEGRAL_LIMIT, INTEGRAL_LIMIT)
+        target_pitch = SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral
 
         # 俯仰 PD 控制
         pitch_error = target_pitch - pitch
-        motor_torque = self.pitch_kp * pitch_error - self.pitch_kd * self.pitch_dot_filtered
-        return motor_torque     # 转换为轮子角速度
+        motor_vel = PITCH_KP * pitch_error - PITCH_KD * self.pitch_dot_filtered
+        return motor_vel / WHEEL_RADIUS      # 转换为轮子角速度
 
-    def update_motor_torque(self):
-        torque = self.calculate_motor_torque()
-        torque = clamp(torque, -self.MAX_MOTOR_TORQUE, self.MAX_MOTOR_TORQUE)
+    def update_motor_speed(self):
+        vel = self.calculate_motor_velocity()
+        vel = clamp(vel, -MAX_MOTOR_VEL, MAX_MOTOR_VEL)
 
         # 左右电机同向转动（考虑轴反向），无偏航差速
-        left_torque = - torque
-        right_torque =  torque
+        left_vel = -vel
+        right_vel = vel
 
         # 加上偏航（yaw）用于转向
-        left_torque += self.yaw
-        right_torque += self.yaw
+        left_vel += self.yaw
+        right_vel += self.yaw
 
-        left_torque = clamp(left_torque, -self.MAX_MOTOR_TORQUE, self.MAX_MOTOR_TORQUE)
-        right_torque = clamp(right_torque, -self.MAX_MOTOR_TORQUE, self.MAX_MOTOR_TORQUE)
+        left_vel = clamp(left_vel, -MAX_MOTOR_VEL, MAX_MOTOR_VEL)
+        right_vel = clamp(right_vel, -MAX_MOTOR_VEL, MAX_MOTOR_VEL)
 
-        self.data.actuator('motor_l_wheel').ctrl = [left_torque]
-        self.data.actuator('motor_r_wheel').ctrl = [right_torque]
+        self.data.actuator('motor_l_wheel').ctrl = [left_vel]
+        self.data.actuator('motor_r_wheel').ctrl = [right_vel]
 
     def reset(self):
         self.pitch_dot_filtered = 0.0

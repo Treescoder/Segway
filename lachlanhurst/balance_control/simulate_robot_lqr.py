@@ -14,8 +14,9 @@ from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtGui import (
     QGuiApplication, QSurfaceFormat
 )
+import time
 
-from robot_lqr import RobotLqr
+from lachlanhurst.balance_control.robot_lqr import RobotLqr
 
 format = QSurfaceFormat()
 format.setDepthBufferSize(24)
@@ -27,6 +28,7 @@ format.setVersion(2,0)
 format.setRenderableType(QSurfaceFormat.RenderableType.OpenGL)
 format.setProfile(QSurfaceFormat.CompatibilityProfile)
 QSurfaceFormat.setDefaultFormat(format)
+
 
 class Viewport(QOpenGLWindow):
 
@@ -51,6 +53,7 @@ class Viewport(QOpenGLWindow):
         self.timer.setInterval(1/60*1000)
         self.timer.timeout.connect(self.update)
         self.timer.start()
+        self.body_id = model.body('robot_body').id  # 获取机器人身体 ID（用于跟随）
 
     def mousePressEvent(self, event):
         self.__last_pos = event.position()
@@ -87,6 +90,10 @@ class Viewport(QOpenGLWindow):
         self.scale = scaleFactor
 
     def paintGL(self) -> None:
+        # 让摄像机跟随机器人身体
+        body_pos = self.data.xpos[self.body_id]
+        self.cam.lookat = body_pos.copy()
+
         t = time.time()
         mujoco.mjv_updateScene(self.model, self.data, self.opt, None, self.cam, mujoco.mjtCatBit.mjCAT_ALL, self.scn)
         viewport = mujoco.MjrRect(0, 0, int(self.width * self.scale), int(self.height * self.scale))
@@ -94,6 +101,7 @@ class Viewport(QOpenGLWindow):
 
         self.runtime.append(time.time()-t)
         self.updateRuntime.emit(np.average(self.runtime))
+
 
 class UpdateSimThread(QThread):
 
@@ -109,8 +117,16 @@ class UpdateSimThread(QThread):
         self.speed = 0.0
         self.yaw = 0.0
 
+        # 预先获取关键元素的 id，避免每帧查找
+        self.body_id = self.model.body('robot_body').id
+        self.l_joint_id = self.model.joint('torso_l_wheel').id
+        self.r_joint_id = self.model.joint('torso_r_wheel').id
+
         # reset the simulation timer
         self.reset()
+
+        # 打印调试信息的计时器
+        self.last_print_time = 0.0
 
     @property
     def real_time(self):
@@ -135,8 +151,46 @@ class UpdateSimThread(QThread):
 
                 # step the simulation
                 mujoco.mj_step(self.model, self.data)
+
+                # 定期打印调试信息（每 0.5 秒一次）
+                current_time = self.data.time
+                if current_time - self.last_print_time >= 0.5:
+                    self.last_print_time = current_time
+                    self._print_debug_info()
             else:
                 time.sleep(0.00001)
+
+    def _print_debug_info(self):
+        """打印详细状态：欧拉角、车轮速度/实际扭矩、LQR控制输出"""
+        try:
+            # 1. 四元数转欧拉角 (ZYX 顺序: yaw, pitch, roll)
+            quat = self.data.xquat[self.body_id]  # [w,x,y,z]
+            from scipy.spatial.transform import Rotation as R
+            r = R.from_quat([quat[1], quat[2], quat[3], quat[0]])  # [x,y,z,w] 顺序
+            euler = r.as_euler('zyx', degrees=True)  # 返回 [yaw, pitch, roll] 角度制
+            yaw, pitch, roll = euler
+
+            # 2. 车轮角速度和实际电机扭矩
+            l_vel = self.data.qvel[self.l_joint_id]
+            r_vel = self.data.qvel[self.r_joint_id]
+            l_torque = self.data.actuator_force[0]  # 实际执行器力
+            r_torque = self.data.actuator_force[1]
+            l_ctrl = self.data.ctrl[0]  # 左电机目标速度/力
+            r_ctrl = self.data.ctrl[1]  # 右电机目标速度/力
+            # 计算实际车身线速度（m/s）
+            WHEEL_RADIUS = 0.034
+            # 注意左轮轴反向，所以取 -l_vel
+            avg_wheel_vel = (-l_vel + r_vel) / 2.0
+            actual_speed = avg_wheel_vel
+
+            # 4. 打印所有信息
+            print(f"[t={self.data.time:.2f}s] "
+                  f"pitch={pitch:6.2f}° roll={roll:6.2f}° yaw={yaw:6.2f}° | "
+                  f"actual_speed={actual_speed:6.2f} m/s | target_speed={self.speed:5.2f} m/s | "
+                  f"L: {l_vel:6.2f} rad/s, ctrl={l_ctrl:6.2f} | "
+                  f"R: {r_vel:6.2f} rad/s, ctrl={r_ctrl:6.2f}")
+        except Exception as e:
+            print(f"Debug print error: {e}")
 
     def stop(self):
         self.running = False
@@ -146,6 +200,7 @@ class UpdateSimThread(QThread):
         self.real_time_start = time.monotonic_ns()
         self.last_robot_update = time.monotonic_ns()
         self.robot.reset()
+        self.last_print_time = 0.0
 
     def set_speed(self, speed: float) -> None:
         self.speed = speed

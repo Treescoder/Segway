@@ -14,6 +14,9 @@ from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtGui import (
     QGuiApplication, QSurfaceFormat
 )
+import time
+
+# from lachlanhurst.src.simulation.robot_lqr import RobotLqr
 
 from lachlanhurst.balance_control.robot_pid import RobotPID
 
@@ -147,7 +150,7 @@ class UpdateSimThread(QThread):
                     self.robot.set_velocity_linear_set_point(self.speed)
                     self.robot.set_yaw(self.yaw)
                     # update motor speed with LQR controller
-                    self.robot.update_motor_torque()
+                    self.robot.update_motor_speed()
 
                 # step the simulation
                 mujoco.mj_step(self.model, self.data)
@@ -219,12 +222,11 @@ class Window(QMainWindow):
         self.cam = self.create_free_camera()
         self.opt = mujoco.MjvOption()
         self.scn = mujoco.MjvScene(self.model, maxgeom=10000)
-        self.scn.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = False
-        self.scn.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = False
+        self.scn.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = True
+        self.scn.flags[mujoco.mjtRndFlag.mjRND_REFLECTION] = True
         self.viewport = Viewport(self.model, self.data, self.cam, self.opt, self.scn)
         self.viewport.setScreenScale(QGuiApplication.instance().primaryScreen().devicePixelRatio())
         self.viewport.updateRuntime.connect(self.show_runtime)
-        self.move(200, 50)
 
         layout = QVBoxLayout()
         layout_top = QHBoxLayout()
@@ -307,8 +309,8 @@ class Window(QMainWindow):
         cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         cam.fixedcamid = -1
         cam.lookat = np.array([ 0.0 , 0.0 , 0.0 ])
-        cam.distance = self.model.stat.extent * 3
-        cam.elevation = -30
+        cam.distance = self.model.stat.extent * 2
+        cam.elevation = -25
         cam.azimuth = 45
         return cam
 
