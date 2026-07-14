@@ -1,4 +1,4 @@
-# segway_ball_pid.py —— 原始力矩环平衡控制器（无任何修改）
+# segway_ball_follow_pid_buy.py —— 力矩平衡控制器（初始朝向 +Y，无额外旋转）
 import numpy as np
 import mujoco
 from scipy.spatial.transform import Rotation
@@ -8,14 +8,14 @@ MAX_TORQUE = 800.0
 
 PITCH_KP = 150.0
 PITCH_KD = 170.0
-PITCH_KI = 6.0
-PITCH_INT_LIMIT = 6.0
+PITCH_KI = 5.0
+PITCH_INT_LIMIT = 5.0
 
 SPEED_KP = 7.0
 SPEED_KI = 0.9
-SPEED_INT_LIMIT = 10.0
+SPEED_INT_LIMIT = 50.0
 
-FEEDFORWARD_TORQUE = -20.0
+FEEDFORWARD_TORQUE = 0.0
 
 YAW_DEADZONE = 0.01
 YAW_GAIN = 1.0
@@ -76,7 +76,7 @@ class SegwayPID:
 
         self.filtered_wheel_vel = 0.9 * self.filtered_wheel_vel + 0.1 * wheel_vel
 
-        pitch_error = 0.0 - pitch
+        pitch_error = 0.2 - pitch
         self.pitch_integral += pitch_error * 0.005
         self.pitch_integral = clamp(self.pitch_integral, -PITCH_INT_LIMIT, PITCH_INT_LIMIT)
         torque_balance = PITCH_KP * pitch_error - PITCH_KD * pitch_dot + PITCH_KI * self.pitch_integral
@@ -102,9 +102,9 @@ class SegwayPID:
         self.pitch_integral = 0.0
         self.speed_error_integral = 0.0
         self.filtered_wheel_vel = 0.0
-        init_pitch = 0.0
-        qx = np.sin(init_pitch / 2.0)
-        qw = np.cos(init_pitch / 2.0)
-        self.data.qpos[3:7] = [qw, qx, 0.0, 0.0]
+        self.velocity_linear_set_point = 0.0
+        self.yaw = 0.0
+        self.data.qpos[3:7] = [1.0, 0.0, 0.0, 0.0]   # w,x,y,z
+
         self.data.actuator('motor_l_wheel').ctrl = [0]
         self.data.actuator('motor_r_wheel').ctrl = [0]
