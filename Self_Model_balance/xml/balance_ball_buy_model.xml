@@ -1,0 +1,70 @@
+<!--直径：48cm, 宽：18cm, 轴长：70cm, 车把杆长：104cm, 球包高：120cm-->
+<mujoco model="balance">
+    <compiler angle="radian"/>
+    <size njmax="500" nconmax="100"/>
+    <asset>
+        <texture type="2d" name="wheel_texture" builtin="checker" mark="edge"
+                 rgb1="1 1 1" rgb2="1 0.3 0.3"
+                 markrgb="0.3 0.3 0.3" width="1024" height="1024"/>
+        <material name="wheel_material" texture="wheel_texture" texuniform="true" texrepeat="20 20"/>
+        <texture type="2d" name="body_texture" builtin="gradient" rgb1="0.9 0.3 0.5"
+                 rgb2="0.95 0.85 0.5" width="512" height="512"/>
+        <material name="body_material" texture="body_texture" texrepeat="4 2" shininess="0.3"/>
+        <texture type="2d" name="bag_texture" builtin="gradient" rgb1="0.15 0.15 0.15"
+                 rgb2="0.4 0.4 0.4" width="256" height="256"/>
+        <material name="bag_material" texture="bag_texture" texrepeat="1 2" shininess="0.3"/>
+    </asset>
+    <option gravity="0 0 -9.81" viscosity="0.002"/>
+
+    <worldbody>
+        <!-- 车体基座，车轮中心高度0.24m -->
+        <body name="segway" pos="0 0 0.24">
+            <joint name="segway_free" type="free" damping="0.5"/>
+
+            <!-- 轮轴杆（位于车轮中心高度） -->
+            <body name="wheel_axle" pos="0 0 0">
+                <inertial pos="0.0 -0.09 0.0" quat="0.707107 0 0 0.707107"
+                          mass="40.489" diaginertia="0.87993 0.64149 0.31774"/>
+                <geom type="box" size="0.35 0.20 0.02" material="body_material"/>
+            </body>
+
+            <!-- 车把杆：长104cm，底部从轮轴稍上方开始 -->
+            <body name="pendulum" pos="0 0 0.02">
+                <inertial pos="0.0 0.0 0.0" quat="0.707107 0 0 0.707107"
+                          mass="10.48164" diaginertia="0.75267 0.672276 0.0894829"/>
+                <!-- 扁长方体，尺寸：半宽0.031m，半厚0.031m，半高0.52m （总高1.04m，体积等同原圆柱） -->
+                <geom type="box" size="0.051 0.016 0.52" pos="0 0.18 0.52" material="body_material"/>
+
+                <!-- 高尔夫球包：高120cm，位于杆后方偏上 -->
+                <body name="golf_bag" pos="0 0.35 0.6">
+                    <inertial pos="0 0 0" mass="10.0"
+                              diaginertia="1.8 1.8 0.225"/>
+                    <geom type="cylinder" size="0.15 0.6" material="bag_material"/>
+                </body>
+            </body>
+
+            <!-- 左轮：直径48cm，宽18cm，位置x=-0.35 -->
+            <body name="l_wheel" pos="-0.35 0 0">
+                <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5"
+                          mass="4.23004" diaginertia="0.01832 0.010662 0.0105854"/>
+                <joint name="torso_l_wheel" type="hinge" pos="0 0 0" axis="-1 0 0" damping="0.05"/>
+                <geom type="cylinder" size="0.24 0.09" quat="0.707107 0 0.707107 0"
+                      material="wheel_material" contype="2" conaffinity="1" friction="2 1 0.8"/>
+            </body>
+
+            <!-- 右轮：直径48cm，宽18cm，位置x=0.35 -->
+            <body name="r_wheel" pos="0.35 0 0">
+                <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5"
+                          mass="4.23004" diaginertia="0.01832 0.010662 0.0105854"/>
+                <joint name="torso_r_wheel" type="hinge" pos="0 0 0" axis="-1 0 0" damping="0.05"/>
+                <geom type="cylinder" size="0.24 0.09" quat="0.707107 0 0.707107 0"
+                      material="wheel_material" contype="2" conaffinity="1" friction="2 1 0.8"/>
+            </body>
+        </body>
+    </worldbody>
+
+    <actuator>
+        <motor name="motor_l_wheel" joint="torso_l_wheel" gear="1" ctrllimited="true" ctrlrange="-800 800"/>
+        <motor name="motor_r_wheel" joint="torso_r_wheel" gear="1" ctrllimited="true" ctrlrange="-800 800"/>
+    </actuator>
+</mujoco>
