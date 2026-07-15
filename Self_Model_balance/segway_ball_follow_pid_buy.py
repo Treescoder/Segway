@@ -4,21 +4,23 @@ import mujoco
 from scipy.spatial.transform import Rotation
 
 WHEEL_RADIUS = 0.24
-MAX_TORQUE = 800.0
+wheel_base = 0.25 * 2
+MAX_TORQUE = 50.0
 
 PITCH_KP = 150.0
 PITCH_KD = 170.0
 PITCH_KI = 6.0
 PITCH_INT_LIMIT = 6.0
 
-SPEED_KP = 7.0
-SPEED_KI = 0.9
+SPEED_KP = 95.0
+SPEED_KI = 0.9 * 15
 SPEED_INT_LIMIT = 10.0
 
 FEEDFORWARD_TORQUE = -20.0
 
 YAW_DEADZONE = 0.01
 YAW_GAIN = 1.0
+YAW_KP = 100
 
 def clamp(n, minn, maxn):
     return max(min(maxn, n), minn)
@@ -42,10 +44,10 @@ class SegwayPID:
         self.velocity_linear_set_point = vel
 
     def set_yaw(self, yaw):
-        if abs(yaw) < YAW_DEADZONE:
-            self.yaw = 0.0
-        else:
-            self.yaw = yaw * YAW_GAIN
+        # if abs(yaw) < YAW_DEADZONE:
+        #     self.yaw = 0.0
+        # else:
+        self.yaw = yaw
 
     def get_pitch(self) -> float:
         quat = self.data.xquat[self.body_id]
@@ -65,6 +67,13 @@ class SegwayPID:
         rot = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
         return rot.as_euler('xyz', degrees=False)[1]
 
+    def get_yaw(self) -> float:
+        quat = self.data.xquat[self.body_id]
+        if quat[0] == 0:
+            return 0.0
+        rot = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
+        return rot.as_euler("xyz", degrees=False)[2]
+
     def get_wheel_velocity_avg(self) -> float:
         return (self.data.qvel[self.l_dof] + self.data.qvel[self.r_dof]) / 2.0
 
@@ -73,10 +82,11 @@ class SegwayPID:
         pitch_dot = self.get_pitch_dot()
         roll = self.get_roll()
         wheel_vel = self.get_wheel_velocity_avg()
+        current_yaw = self.get_yaw()
 
         self.filtered_wheel_vel = 0.9 * self.filtered_wheel_vel + 0.1 * wheel_vel
 
-        pitch_error = 0.0 - pitch
+        pitch_error = np.deg2rad(5) - pitch
         self.pitch_integral += pitch_error * 0.005
         self.pitch_integral = clamp(self.pitch_integral, -PITCH_INT_LIMIT, PITCH_INT_LIMIT)
         torque_balance = PITCH_KP * pitch_error - PITCH_KD * pitch_dot + PITCH_KI * self.pitch_integral
@@ -85,12 +95,17 @@ class SegwayPID:
         vel_error = actual_speed - self.velocity_linear_set_point
         self.speed_error_integral += vel_error * 0.005
         self.speed_error_integral = clamp(self.speed_error_integral, -SPEED_INT_LIMIT, SPEED_INT_LIMIT)
-        speed_correction = (SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral) * 15.0
+        speed_correction = SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral
 
         total_torque = torque_balance + speed_correction + FEEDFORWARD_TORQUE
 
-        wheel_base = 0.25 * 2
-        yaw_diff = self.yaw * wheel_base / (2 * WHEEL_RADIUS) * 5.0
+        yaw_error = self.yaw - current_yaw
+        yaw_error = np.arctan2(
+            np.sin(self.yaw - current_yaw),
+            np.cos(self.yaw - current_yaw)
+        )
+        # yaw_diff = self.yaw * wheel_base / (2 * WHEEL_RADIUS) * 5.0
+        yaw_diff = YAW_KP * yaw_error
 
         left_torque = clamp(total_torque - yaw_diff, -MAX_TORQUE, MAX_TORQUE)
         right_torque = clamp(total_torque + yaw_diff, -MAX_TORQUE, MAX_TORQUE)
