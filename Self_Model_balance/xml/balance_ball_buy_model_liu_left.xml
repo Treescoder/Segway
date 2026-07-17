@@ -25,7 +25,7 @@
 
             <!-- 轮轴杆（位于车轮中心高度） -->
             <body name="wheel_axle" pos="0 0 0">
-                <inertial pos="0.0 -0.09 0.0" quat="0.707107 0 0 0.707107"
+                <inertial pos="0.0 -0.05 0.0" quat="0.707107 0 0 0.707107"
                           mass="37.8" diaginertia="0.75 1.35 1.60"/>
                 <geom type="box" size="0.35 0.20 0.02" material="body_material"/>
             </body>
@@ -41,10 +41,10 @@
                       quat="0.707107 0 0.707107 0" material="body_mat"/>
 
                 <!-- 高尔夫球包：高120cm，位于杆后方偏上 -->
-                <body name="golf_bag" pos="0 0.35 0.6">
+                <body name="golf_bag" pos="0.35 0.1 0.45" quat="0.866025 -0.6 0 0">
                     <inertial pos="0 0 0" mass="15.0"
                               diaginertia="1.8 1.8 0.225"/>
-                    <geom type="cylinder" size="0.15 0.6" material="bag_material"/>
+                    <geom type="cylinder" size="0.15 0.5" material="bag_material"/>
                 </body>
             </body>
 

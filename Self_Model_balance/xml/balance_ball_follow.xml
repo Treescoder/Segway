@@ -30,6 +30,9 @@
                 <inertial pos="0.0 0.0 0.0" quat="0.707107 0 0 0.707107"
                           mass="10.48164" diaginertia="0.75267 0.672276 0.0894829"/>
                 <geom type="cylinder" size="0.015 0.35" pos="0 0.05 0.35" material="body_material"/>
+                <!-- 把手：圆柱体，水平横向，位于车把顶端 -->
+                <geom type="cylinder" size="0.025 0.22" pos="0 0.18 1.04"
+                      quat="0.707107 0 0.707107 0" material="body_mat"/>
 
                 <!-- 高尔夫球包，居中，位于倒立杆顶端 -->
                 <body name="golf_bag" pos="0 0.2 0.35">
