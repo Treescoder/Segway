@@ -2,12 +2,14 @@
   <compiler angle="radian"/>
   <option timestep="0.000025"/>
 
-<!--  <include file="balance.xml"/>--> # 无球包
 <!--  <include file="balance_ball_and_human.xml"/> # 球包和人一起平衡-->
 <!--  <include file="balance_ball_follow.xml"/> # 有球包，跟踪人平衡-->
 <!--  <include file="balance_ball_buy_model.xml"/> # 买的车模型，有球包，不跟踪人仅平衡-->
 <!--  <include file="balance_ball_buy_model_liu_left.xml"/> # 买的车模型, 球包在左边，不跟踪人仅平衡-->
+
   <include file="balance_ball_buy_model_liu_front.xml"/> # 买的车模型(liu)，球包在前面，不跟踪人仅平衡
+<!--  <include file="balance_ball_buy_model_liu_front_follow.xml"/> # 买的车模型(liu)，球包在前面，平衡且跟踪人-->
+
 <!--  <include file="balance_ball_buy_model_liu_in.xml"/> # 买的车模型(liu)，球包在里面，不跟踪人仅平衡-->
 <!--  <include file="balance_ball_follow_buy_model.xml"/> # 买的车模型，有球包，跟踪人且平衡-->
 

@@ -44,7 +44,7 @@
                       quat="0.707107 0 0.707107 0" material="body_mat"/>
 
                  球包：高120cm，位于杆后方偏上
-                <body name="golf_bag" pos="0 0.01 0.5">
+                <body name="golf_bag" pos="0 0.0 0.5">
                     <inertial pos="0 0 0" mass="10.0"
                               diaginertia="1.10 1.10 0.10"/>
                     <geom type="cylinder" size="0.15 0.5" material="bag_mat"/>

@@ -29,7 +29,7 @@
 
             <!-- 底盘（位于车轮中心高度） -->
             <body name="chassis" pos="0 0 0">
-                <inertial pos="0.0 -0.05 0.0" quat="0.707107 0 0 0.707107"
+                <inertial pos="0.0 -0.08 0.0" quat="0.707107 0 0 0.707107"
                           mass="37.8" diaginertia="0.75 1.35 1.60"/>
                 <geom type="box" size="0.35 0.20 0.02" material="body_mat"/>
             </body>
@@ -42,7 +42,10 @@
                 <!-- 把手：圆柱体，水平横向，位于车把顶端 -->
                 <geom type="cylinder" size="0.025 0.22" pos="0 0.18 1.04"
                       quat="0.707107 0 0.707107 0" material="body_mat"/>
-                球包：高120cm，位于杆后方偏上
+                <!-- 模拟摄像机跟踪人 -->
+                <geom type="sphere" size="0.03" pos="0 0.18 0.9" rgba="0 0 0 1" />
+
+<!--             球包：高120cm，位于杆后方偏上-->
                 <body name="golf_bag" pos="0 0.35 0.5">
                     <inertial pos="0 0 0" mass="10.0"
                               diaginertia="1.10 1.10 0.10"/>
@@ -68,17 +71,18 @@
                       material="wheel_mat" contype="2" conaffinity="1" friction="2 1 0.8"/>
             </body>
         </body>
+        <body name="human" mocap="true">
+            <!-- 身体：扁长方体，指向 +y 方向（前进方向） -->
+            <geom type="box" size="0.15 0.1 0.35" pos="0 0 0.35" rgba="0.9 0.2 0.2 1"/>
+            <!-- 头部 -->
+            <geom type="sphere" size="0.15" pos="0 0 0.85" rgba="1 0.8 0.6 1"/>
+        </body>
     </worldbody>
 
     <actuator>
         <!-- 电机 -->
-        <motor name="motor_l_wheel" joint="torso_l_wheel" gear="1" ctrllimited="true" ctrlrange="-80 80"/>
-        <motor name="motor_r_wheel" joint="torso_r_wheel" gear="1" ctrllimited="true" ctrlrange="-80 80"/>
+        <motor name="motor_l_wheel" joint="torso_l_wheel" gear="1" ctrllimited="true" ctrlrange="-50 50"/>
+        <motor name="motor_r_wheel" joint="torso_r_wheel" gear="1" ctrllimited="true" ctrlrange="-50 50"/>
     </actuator>
-
-<!--    <actuator>-->
-<!--        <velocity name="motor_l_wheel" joint="torso_l_wheel" gear="1" kv="0.9" ctrllimited="true" ctrlrange="-200 200"/>-->
-<!--        <velocity name="motor_r_wheel" joint="torso_r_wheel" gear="1" kv="0.9" ctrllimited="true" ctrlrange="-200 200"/>-->
-<!--    </actuator>-->
 
 </mujoco>

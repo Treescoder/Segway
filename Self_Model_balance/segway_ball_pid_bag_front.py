@@ -76,7 +76,7 @@ class SegwayPID:
 
         self.filtered_wheel_vel = 0.9 * self.filtered_wheel_vel + 0.1 * wheel_vel
 
-        pitch_error = 0.1 - pitch
+        pitch_error = np.deg2rad(9) - pitch
         self.pitch_integral += pitch_error * 0.005
         self.pitch_integral = clamp(self.pitch_integral, -PITCH_INT_LIMIT, PITCH_INT_LIMIT)
         torque_balance = PITCH_KP * pitch_error - PITCH_KD * pitch_dot + PITCH_KI * self.pitch_integral

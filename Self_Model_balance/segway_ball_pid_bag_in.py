@@ -1,4 +1,4 @@
-# 球包挂在里面（并联控制，修正速度误差符号）
+# segway_ball_pid.py —— 原始力矩环平衡控制器（无任何修改）
 import numpy as np
 import mujoco
 from scipy.spatial.transform import Rotation
@@ -6,20 +6,17 @@ from scipy.spatial.transform import Rotation
 WHEEL_RADIUS = 0.24
 MAX_TORQUE = 800.0
 
-# 平衡环
 PITCH_KP = 150.0
 PITCH_KD = 170.0
 PITCH_KI = 6.0
-PITCH_INT_LIMIT = 10.0
+PITCH_INT_LIMIT = 6.0
 
-# 速度环
-SPEED_KP = 6.0
-SPEED_KI = 0.9
-SPEED_INT_LIMIT = 20.0
+SPEED_KP = 7.0
+SPEED_KI = 1.5
+SPEED_INT_LIMIT = 10.0
 
 FEEDFORWARD_TORQUE = 0.0
 
-# 转向
 YAW_DEADZONE = 0.01
 YAW_GAIN = 1.0
 
@@ -55,7 +52,7 @@ class SegwayPID:
         if quat[0] == 0:
             return 0.0
         rot = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
-        return rot.as_euler('xyz', degrees=False)[0]   # 正=前倾
+        return rot.as_euler('xyz', degrees=False)[0]
 
     def get_pitch_dot(self) -> float:
         angular = self.data.joint('segway_free').qvel[-3:]
@@ -74,27 +71,25 @@ class SegwayPID:
     def update_motor_torque(self):
         pitch = self.get_pitch()
         pitch_dot = self.get_pitch_dot()
+        roll = self.get_roll()
         wheel_vel = self.get_wheel_velocity_avg()
 
         self.filtered_wheel_vel = 0.9 * self.filtered_wheel_vel + 0.1 * wheel_vel
 
-        # 平衡环（保持原始正确极性）
-        pitch_error = np.deg2rad(0) - pitch
+        pitch_error = 0.1 - pitch
         self.pitch_integral += pitch_error * 0.005
         self.pitch_integral = clamp(self.pitch_integral, -PITCH_INT_LIMIT, PITCH_INT_LIMIT)
         torque_balance = PITCH_KP * pitch_error - PITCH_KD * pitch_dot + PITCH_KI * self.pitch_integral
 
-        # 速度环（修正符号：目标 - 实际）
         actual_speed = self.filtered_wheel_vel * WHEEL_RADIUS
-        vel_error = self.velocity_linear_set_point - actual_speed
+        vel_error = actual_speed - self.velocity_linear_set_point
         self.speed_error_integral += vel_error * 0.005
         self.speed_error_integral = clamp(self.speed_error_integral, -SPEED_INT_LIMIT, SPEED_INT_LIMIT)
-        speed_correction = SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral
+        speed_correction = (SPEED_KP * vel_error + SPEED_KI * self.speed_error_integral) * 15.0
 
         total_torque = torque_balance + speed_correction + FEEDFORWARD_TORQUE
 
-        # 转弯
-        wheel_base = 0.25 * 2   # 0.5 m
+        wheel_base = 0.25 * 2
         yaw_diff = self.yaw * wheel_base / (2 * WHEEL_RADIUS) * 5.0
 
         left_torque = clamp(total_torque - yaw_diff, -MAX_TORQUE, MAX_TORQUE)
