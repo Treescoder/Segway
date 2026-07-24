@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtOpenGL import QOpenGLWindow
 from PySide6.QtGui import QGuiApplication, QSurfaceFormat
-from segway_ball_follow_pid import SegwayPID
+from PDseries import SegwayPID
+from scipy.spatial.transform import Rotation
 
 format = QSurfaceFormat()
 format.setDepthBufferSize(24)
@@ -22,6 +23,9 @@ format.setVersion(2,0)
 format.setRenderableType(QSurfaceFormat.RenderableType.OpenGL)
 format.setProfile(QSurfaceFormat.CompatibilityProfile)
 QSurfaceFormat.setDefaultFormat(format)
+
+def clamp(n, minn, maxn):
+    return max(min(maxn, n), minn)
 
 class Viewport(QOpenGLWindow):
     updateRuntime = Signal(float)
@@ -37,6 +41,7 @@ class Viewport(QOpenGLWindow):
         self.timer.timeout.connect(self.update)
         self.timer.start()
         self.body_id = model.body('segway').id
+        self.elevation_dir = -1
 
     def mousePressEvent(self, e): self.__last_pos = e.position()
     def mouseMoveEvent(self, e):
@@ -54,10 +59,22 @@ class Viewport(QOpenGLWindow):
     def resizeGL(self, w, h): self.width, self.height = w, h
     def setScreenScale(self, f): self.scale = f
     def paintGL(self):
-        body_pos = self.data.xpos[self.body_id]
+        body_pos = self.data.xpos[self.body_id] + 0.2
         self.cam.lookat = body_pos.copy()
+        self.cam.azimuth += 0.1
+        self.cam.elevation += self.elevation_dir * 0.0
+        if self.cam.elevation <= -60:
+            self.cam.elevation = -60
+            self.elevation_dir = 1
+        elif self.cam.elevation >= -10:
+            self.cam.elevation = -10
+            self.elevation_dir = -1
+        self.cam.elevation = clamp(self.cam.elevation, -90, -10)
         t = time.time()
         mujoco.mjv_updateScene(self.model, self.data, self.opt, None, self.cam, mujoco.mjtCatBit.mjCAT_ALL, self.scn)
+        screen = self.screen()
+        if screen is not None:
+            self.scale = screen.devicePixelRatio()
         vp = mujoco.MjrRect(0,0,int(self.width*self.scale),int(self.height*self.scale))
         mujoco.mjr_render(vp, self.scn, self.con)
         self.runtime.append(time.time()-t)
@@ -70,6 +87,10 @@ class UpdateSimThread(QThread):
         self.running = True
         self.robot = SegwayPID(model, data)
         self.speed, self.yaw = 0.0, 0.0
+        self.speed_cmd = 0.0  # UI给的
+        self.speed_ref = 0.0  # 真正送PID
+        self.yaw_cmd = 0.0
+        self.yaw_ref = 0.0
         self.body_id = model.body('segway').id
         self.l_dof = model.jnt_dofadr[model.joint('torso_l_wheel').id]
         self.r_dof = model.jnt_dofadr[model.joint('torso_r_wheel').id]
@@ -84,8 +105,12 @@ class UpdateSimThread(QThread):
             if self.data.time < self.real_time/1e9:
                 if (time.monotonic_ns()-self.last_robot_update)/1e9 >= 0.005:
                     self.last_robot_update = time.monotonic_ns()
-                    self.robot.set_velocity_linear_set_point(self.speed)
-                    self.robot.set_yaw(self.yaw)
+                    # 更新参考值
+                    self.update_speed_ref()
+                    self.update_yaw_ref()
+                    # 再送给PID
+                    self.robot.set_velocity_linear_set_point(self.speed_ref)
+                    self.robot.set_yaw(self.yaw_ref)
                     self.robot.update_motor_torque()
                 mujoco.mj_step(self.model, self.data)
                 if self.data.time - self.last_print_time >= 0.5:
@@ -97,15 +122,15 @@ class UpdateSimThread(QThread):
     def _print_debug_info(self):
         try:
             quat = self.data.xquat[self.body_id]
-            from scipy.spatial.transform import Rotation as R
-            r = R.from_quat([quat[1], quat[2], quat[3], quat[0]])
-            euler = r.as_euler('xyz', degrees=True)
+            rot = Rotation.from_quat([quat[1], quat[2], quat[3], quat[0]])
+            euler = rot.as_euler('xyz', degrees=True)
             pitch, roll, yaw = euler[0], euler[1], euler[2]
             l_vel, r_vel = self.data.qvel[self.l_dof], self.data.qvel[self.r_dof]
-            actual_speed = (l_vel+r_vel) / 2 * 0.1275
+            actual_speed = (l_vel+r_vel) / 2 * 0.24
             l_ctrl, r_ctrl = self.data.ctrl[0], self.data.ctrl[1]
-            print(f"[t={self.data.time:.2f}s] pitch={pitch:6.2f}° roll={roll:6.2f}° yaw={yaw:6.2f}° | "
-                  f"actual_speed={actual_speed:6.3f} m/s | target_speed={self.speed:5.2f} m/s | "
+            print(f"[t={self.data.time:.2f}s] pitch={pitch:6.2f}° yaw_r={np.degrees(self.yaw_ref):6.2f}°"
+                  f" yaw={yaw:6.2f}° | "
+                  f"actual_speed={actual_speed:6.3f} m/s | target_speed={self.speed_ref:5.2f} m/s | "
                   f"L_vel={l_vel:6.2f} R_vel={r_vel:6.2f} | ctrl=({l_ctrl:6.2f},{r_ctrl:6.2f})")
         except Exception as e:
             print(f"Debug print error: {e}")
@@ -119,9 +144,36 @@ class UpdateSimThread(QThread):
         self.last_robot_update = time.monotonic_ns()
         self.robot.reset()
         self.last_print_time = 0.0
+        self.speed_cmd = 0
+        self.speed_ref = 0
+        self.yaw_cmd = 0
+        self.yaw_ref = 0
 
-    def set_speed(self, s): self.speed = s
-    def set_yaw(self, y): self.yaw = y
+    def set_speed(self, s): self.speed_cmd = s
+    def set_yaw(self, y): self.yaw_cmd = y
+
+    def update_speed_ref(self):
+        ACC = 0.8  # 最大加速度
+        STEP = ACC * 0.005
+        error = self.speed_cmd - self.speed_ref
+        if error > STEP:
+            error = STEP
+        elif error < -STEP:
+            error = -STEP
+        self.speed_ref += error
+
+    def update_yaw_ref(self):
+        ACC = 0.698  # 最大加速度
+        STEP = ACC * 0.005
+        error = np.arctan2(
+            np.sin(self.yaw_cmd - self.yaw_ref),
+            np.cos(self.yaw_cmd - self.yaw_ref)
+        )
+        if error > STEP:
+            error = STEP
+        elif error < -STEP:
+            error = -STEP
+        self.yaw_ref += error
 
 class Window(QMainWindow):
     def __init__(self):
@@ -132,8 +184,8 @@ class Window(QMainWindow):
         self.cam = mujoco.MjvCamera()
         self.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
         self.cam.lookat = np.array([0,0,0])
-        self.cam.distance = self.model.stat.extent*10
-        self.cam.elevation = -25
+        self.cam.distance = self.model.stat.extent * 10
+        self.cam.elevation = -30
         self.cam.azimuth = 45
         self.opt = mujoco.MjvOption()
         self.scn = mujoco.MjvScene(self.model, 10000)
@@ -152,8 +204,8 @@ class Window(QMainWindow):
         # speed slider
         speed_layout = QHBoxLayout()
         self.speed_slider = QSlider(Qt.Horizontal)
-        self.speed_slider.setMinimum(-4.16 * 1000)
-        self.speed_slider.setMaximum(4.16 *  1000)
+        self.speed_slider.setMinimum(-15/3.6 * 1000)
+        self.speed_slider.setMaximum(15/3.6 * 1000)
         self.speed_slider.setValue(0)
         self.speed_slider.valueChanged.connect(lambda v: self.th.set_speed(v/1000))
         speed_layout.addWidget(QLabel("Speed"))
@@ -161,10 +213,10 @@ class Window(QMainWindow):
         # yaw slider
         yaw_layout = QHBoxLayout()
         self.yaw_slider = QSlider(Qt.Horizontal)
-        self.yaw_slider.setMinimum(-10*1000)
-        self.yaw_slider.setMaximum(10*1000)
+        self.yaw_slider.setMinimum(-np.deg2rad(180)*1000)
+        self.yaw_slider.setMaximum(np.deg2rad(180)*1000)
         self.yaw_slider.setValue(0)
-        self.yaw_slider.valueChanged.connect(lambda v: self.th.set_yaw(v/1000))
+        self.yaw_slider.valueChanged.connect(lambda v: self.th.set_yaw(-v/1000))
         yaw_layout.addWidget(QLabel("Yaw"))
         yaw_layout.addWidget(self.yaw_slider)
         ctrl_layout.addLayout(speed_layout)
@@ -175,7 +227,8 @@ class Window(QMainWindow):
         layout.addWidget(QWidget.createWindowContainer(self.viewport))
         layout.setContentsMargins(0,4,0,0)
         w = QWidget(); w.setLayout(layout); self.setCentralWidget(w)
-        self.resize(800,600)
+        self.resize(1650,850)
+        self.move(1950, 20)
         self.th = UpdateSimThread(self.model, self.data, self)
         self.th.start()
 
