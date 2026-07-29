@@ -10,7 +10,7 @@
     </default>
 
     <!-- ========== 引入模型模块 ========== -->
-<!--    <include file="human.xml"/>-->
+    <include file="human.xml"/>
     <include file="golf10_barfh.xml"/>
 
     <!-- ========== 统计 & 视觉 ========== -->

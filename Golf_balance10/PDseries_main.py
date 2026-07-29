@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtOpenGL import QOpenGLWindow
 from PySide6.QtGui import QGuiApplication, QSurfaceFormat
+
 from PDseries import SegwayPID
 from scipy.spatial.transform import Rotation
 

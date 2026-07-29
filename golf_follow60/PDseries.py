@@ -13,24 +13,37 @@ WHEEL_RADIUS = 0.24
 wheel_base = 0.25 * 2
 MAX_TORQUE = 50.0
 
-PITCH_KP = 150.0
-PITCH_KD = 100.0
-PITCH_KI = 0.0
+PITCH_KP = 216.08
+PITCH_KD = 71.60
+PITCH_KI = 31.78
 PITCH_INT_LIMIT = 6.0
 
-SPEED_KP = .6
-SPEED_KD = .0
-SPEED_KI = .0
+SPEED_KP = 0.288
+SPEED_KD = 0.0255
+SPEED_KI = 0.0
 SPEED_INT_LIMIT = 10.0
 
 FEEDFORWARD_TORQUE = 0
 
 YAW_DEADZONE = 0.01
 YAW_GAIN = 1.0
-YAW_KP = 200
-YAW_KD = 150
+YAW_KP = 295.82
+YAW_KD = 168.79
 
 DOB_GAIN = 0
+
+# ★ 平衡角自适应学习率（原硬编码 0.005，现改为可调，并改为「只要俯仰角速度小就持续学习」）
+BALANCE_ALPHA = 0.06
+BALANCE_PITCH_DOT_LIMIT = np.deg2rad(10)  # 俯仰角速度低于此值即视为准静态，更新平衡基准
+
+# ★ 平衡角自适应「锚」（可配置）：
+#   - 初值 BALANCE_PITCH_INIT：起步时的平衡角猜测。若结构上已知平衡角（如 com_y=0 时
+#     恒为 +28.7°，与球包质量无关），预置初值可消除起步「爬角期」被行人拉开的问题。
+#   - 钳位 [BALANCE_PITCH_MIN, BALANCE_PITCH_MAX]：自适应律本质是正反馈漂移，窗口就是锚，
+#     窗口越窄越稳。默认值 = 原 -0.12 后置重心配置（初值 0，窗 [-5°, 30°]），行为不变。
+BALANCE_PITCH_INIT = 0.0
+BALANCE_PITCH_MIN = np.deg2rad(-5)
+BALANCE_PITCH_MAX = np.deg2rad(30)
 
 
 def clamp(n, minn, maxn):
@@ -43,11 +56,12 @@ class SegwayPID:
         self.data = data
         self.velocity_linear_set_point = 0.0
         self.yaw = 0.0
-        self.balance_pitch = 0.0
+        self.balance_pitch = BALANCE_PITCH_INIT
 
         self.pitch_integral = 0.0
         self.speed_error_integral = 0.0
         self.filtered_wheel_vel = 0.0
+        self.prev_vel_error = 0.0
 
         self.body_id = model.body('segway').id
         self.l_dof = model.jnt_dofadr[model.joint('torso_l_wheel').id]
@@ -101,22 +115,30 @@ class SegwayPID:
         actual_speed = self.filtered_wheel_vel * WHEEL_RADIUS
 
         # ============================
-        # 更新balance pitch
+        # 更新 balance pitch（★ 改为：只要俯仰角速度足够小即持续学习，
+        #   不再要求近乎静止，这样持续跟随时也能把基准贴合实际平衡点，
+        #   俯仰环只需要修正动态偏差，pitch 波动更小）
         # ============================
-        if (abs(actual_speed) < 0.5 and
-                abs(self.velocity_linear_set_point) < 0.5 and
-                abs(pitch_dot) < np.deg2rad(10)):
-            ALPHA = 0.005
-            self.balance_pitch += ALPHA * (pitch - self.balance_pitch)
-        self.balance_pitch = clamp(self.balance_pitch, np.deg2rad(-5), np.deg2rad(30))
+        if abs(pitch_dot) < BALANCE_PITCH_DOT_LIMIT:
+            self.balance_pitch += BALANCE_ALPHA * (pitch - self.balance_pitch)
+        # ★ 注意：此自适应律（balance_pitch 追踪实际 pitch）本质是正反馈漂移，
+        #   钳位窗口就是它的「锚」——实测把窗放宽到 ±40° 会让全负载段（含满包）漂移发散。
+        #   负载变化引起的平衡角偏移由「俯仰积分 + 放宽的 pitch_target 限幅」承担，勿放宽窗口。
+        self.balance_pitch = clamp(self.balance_pitch, BALANCE_PITCH_MIN, BALANCE_PITCH_MAX)
 
         vel_error = actual_speed - self.velocity_linear_set_point
+        # ★ 速度误差微分（修正原 bug：原代码第二项是 SPEED_KD*vel_error 而非微分）
+        vel_dot = (vel_error - self.prev_vel_error) / 0.005
+        self.prev_vel_error = vel_error
         self.speed_error_integral += vel_error * 0.005
         self.speed_error_integral = clamp(self.speed_error_integral, -SPEED_INT_LIMIT, SPEED_INT_LIMIT)
-        speed_correction = SPEED_KP * vel_error + SPEED_KD * vel_error + SPEED_KI * self.speed_error_integral
+        speed_correction = (SPEED_KP * vel_error
+                            + SPEED_KI * self.speed_error_integral
+                            + SPEED_KD * vel_dot)
 
         pitch_target = speed_correction + self.balance_pitch
-        pitch_target = clamp(pitch_target, np.deg2rad(-30), np.deg2rad(30))
+        # ★ ±45°：给大平衡角（轻载 -33°）之上留出速度环修正空间（旧 ±30° 会钳死）
+        pitch_target = clamp(pitch_target, np.deg2rad(-45), np.deg2rad(45))
 
         pitch_error = pitch_target - pitch
         self.pitch_integral += pitch_error * 0.005
@@ -138,9 +160,11 @@ class SegwayPID:
         self.data.actuator('motor_r_wheel').ctrl[0] = right_torque
 
     def reset(self):
+        self.balance_pitch = BALANCE_PITCH_INIT
         self.pitch_integral = 0.0
         self.speed_error_integral = 0.0
         self.filtered_wheel_vel = 0.0
+        self.prev_vel_error = 0.0
         init_pitch = 0.0
         qx = np.sin(init_pitch / 2.0)
         qw = np.cos(init_pitch / 2.0)

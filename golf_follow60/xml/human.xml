@@ -1,0 +1,76 @@
+<mujoco>
+    <worldbody>
+        <body name="human_main" mocap="true">
+            <inertial pos="0 0 0" mass="1.0" diaginertia="0.2 0.1 0.11"/>
+            <geom name="torso" type="capsule" fromto="0 -.07 0 0 .07 0" size="0.07" material="mat_torso" />
+            <geom name="head" type="box" pos="0 0 0.19" size="0.05 0.1 0.08" material="mat_head"/>
+            <body name="head_face_deco" pos="0.133 0 0.19" euler="0 0 1.57">
+                <geom type="sphere" size="0.02" pos="-0.05 0.08 0.03" rgba="0 0 0 1"/>
+                <geom type="sphere" size="0.02" pos="0.05 0.08 0.03" rgba="0 0 0 1"/>
+                <geom type="capsule" fromto="-0.02 0.09 -0.04 0.02 0.09 -0.04" size="0.01" rgba="1 0 0 1"/>
+            </body>
+            <geom name="uwaist" type="capsule" fromto="-.01 -.06 -.12 -.01 .06 -.12" size="0.06" material="mat_torso"/>
+            <body name="right_upper_arm" pos="0 -0.17 0.06">
+                <joint name="right_shoulder1" type="hinge" pos="0 0 0" axis="2 1 1" limited="true" range="-0.5 0.5" stiffness="1" armature="0.0068" />
+                <joint name="right_shoulder2" type="hinge" pos="0 0 0" axis="0 -1 1" stiffness="1"  armature="0.0051" />
+                <geom name="right_uarm" material="mat_arm" type="capsule" fromto="0 0 0 .16 -.16 -.16"  size="0.04 0.16" />
+                <body name="right_lower_arm" pos=".18 -.18 -.18">
+                    <joint name="right_elbow" type="hinge" pos="0 0 0" axis="0 -1 1" limited="true" range="-0.5 0.5" stiffness="0" armature="0.0028" />
+                    <geom name="right_larm" material="mat_arm"  type="capsule" fromto="0.01 0.01 0.01 .17 .17 .17"  size="0.031" />
+                    <geom name="right_hand" material="mat_handfoot" type="sphere" pos=".18 .18 .18"  size="0.04"/>
+                </body>
+            </body>
+            <body name="left_upper_arm" pos="0 0.17 0.06">
+                <joint name="left_shoulder1" type="hinge" pos="0 0 0" axis="2 1 1" limited="true" range="-0.5 0.5" stiffness="1" armature="0.0068" />
+                <joint name="left_shoulder2" type="hinge" pos="0 0 0" axis="0 1 1"  stiffness="1" armature="0.0051" />
+                <geom name="left_uarm" material="mat_arm" type="capsule" fromto="0 0 0 .16 .16 -.16"  size="0.04 0.16" />
+                <body name="left_lower_arm" pos=".18 .18 -.18">
+                    <joint name="left_elbow" type="hinge" pos="0 0 0" axis="0 1 1" limited="true" range="-0.5 0.5" stiffness="0" armature="0.0028" />
+                    <geom name="left_larm" material="mat_arm" type="capsule" fromto="0.01 -0.01 0.01 .17 -.17 .17"  size="0.031" />
+                    <geom name="left_hand" material="mat_handfoot" type="sphere" pos=".18 -.18 .18"  size="0.04"/>
+                </body>
+            </body>
+            <body name="lwaist" pos="-.01 0 -0.260" quat="1.000 0 -0.002 0" >
+                <geom name="lwaist" type="capsule" fromto="0 -.06 0 0 .06 0"  size="0.06" material="mat_torso"/>
+                <joint name="abdomen_z" type="hinge" pos="0 0 0.065" axis="0 0 1" damping="5" stiffness="20" armature="0.02" />
+                <joint name="abdomen_y" type="hinge" pos="0 0 0.065" axis="0 1 0" damping="5" stiffness="10" armature="0.02" />
+                <body name="pelvis" pos="0 0 -0.165" quat="1.000 0 -0.002 0">
+                    <joint name="abdomen_x" type="hinge" pos="0 0 0.1" axis="1 0 0" damping="5" stiffness="10" armature="0.02" />
+                    <geom name="butt" type="capsule" fromto="-.02 -.07 0 -.02 .07 0"  size="0.09" material="mat_torso"/>
+                    <body name="right_thigh" pos="0 -0.1 -0.04" >
+                        <joint name="right_hip_x" type="hinge" pos="0 0 0" axis="1 0 0" damping="5" stiffness="10" armature="0.01" />
+                        <joint name="right_hip_z" type="hinge" pos="0 0 0" axis="0 0 1" damping="5" stiffness="10" armature="0.01" />
+                        <joint name="right_hip_y" type="hinge" pos="0 0 0" axis="0 1 0" damping="5" stiffness="20" armature="0.01" />
+                        <geom name="right_thigh" type="capsule" fromto="0 0 0 0 0.01 -.34" material="mat_leg" size="0.06" />
+                        <body name="right_shin" pos="0 0.01 -0.403" >
+                            <joint name="right_knee" type="hinge" pos="0 0 .02" axis="0 -1 0" stiffness="1" armature="0.0060" />
+                            <geom name="right_shin" type="capsule" fromto="0 0 0 0 0 -.3" material="mat_leg"  size="0.049" />
+                            <body name="right_foot" pos="0 0 -.39" >
+                                <joint name="right_ankle_y" type="hinge" pos="0 0 0.08" axis="0 1 0" stiffness="4" armature="0.0008" />
+                                <joint name="right_ankle_x" type="hinge" pos="0 0 0.04" axis="1 0 0.5" stiffness="1"  armature="0.0006" />
+                                <geom name="right_foot_cap1" type="capsule" material="mat_handfoot" fromto="-.07 -0.02 0 0.14 -0.04 0" size="0.027" />
+                                <geom name="right_foot_cap2" type="capsule" material="mat_handfoot" fromto="-.07 0 0 0.14  0.02 0" size="0.027" />
+                            </body>
+                        </body>
+                    </body>
+                    <body name="left_thigh" pos="0 0.1 -0.04" >
+                        <joint name="left_hip_x" type="hinge" pos="0 0 0" axis="-1 0 0" damping="5" stiffness="10" armature="0.01" />
+                        <joint name="left_hip_z" type="hinge" pos="0 0 0" axis="0 0 -1" damping="5" stiffness="10" armature="0.01" />
+                        <joint name="left_hip_y" type="hinge" pos="0 0 0" axis="0 1 0" damping="5" stiffness="20" armature="0.01" />
+                        <geom name="left_thigh" material="mat_leg" type="capsule" fromto="0 0 0 0 -0.01 -.34"  size="0.06" />
+                        <body name="left_shin" pos="0 -0.01 -0.403" >
+                            <joint name="left_knee" type="hinge" pos="0 0 .02" axis="0 -1 0" stiffness="1" armature="0.0060" />
+                            <geom name="left_shin" material="mat_leg" type="capsule" fromto="0 0 0 0 0 -.3" size="0.049" />
+                            <body name="left_foot" pos="0 0 -.39" >
+                                <joint name="left_ankle_y" type="hinge" pos="0 0 0.08" axis="0 1 0" stiffness="4" armature="0.0008" />
+                                <joint name="left_ankle_x" type="hinge" pos="0 0 0.04" axis="1 0 0.5" stiffness="1"  armature="0.0006" />
+                                <geom name="left_foot_cap1" material="mat_handfoot" type="capsule" fromto="-.07 0.02 0 0.14 0.04 0"  size="0.027" />
+                                <geom name="left_foot_cap2" material="mat_handfoot" type="capsule" fromto="-.07 0 0 0.14  -0.02 0"  size="0.027" />
+                            </body>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+</mujoco>

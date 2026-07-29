@@ -1,12 +1,7 @@
 <!-- 双轮差速高尔夫球车模型 -->
 <!-- 尺寸：轮径48cm，轮宽18cm，轴长70cm，车把104cm，球包120cm -->
 <!-- 质量：底盘37.8kg，车把5kg，球包10kg，车轮4.5kg×2，总重61.8kg -->
-<mujoco model="balance">
-
-    <compiler angle="radian"/>
-    <size njmax="500" nconmax="100"/>
-    <option gravity="0 0 -9.81" viscosity="0.002"/>
-
+<mujoco model="golf10_barth">
     <!-- 材质 -->
     <asset>
         <texture type="2d" name="wheel_texture" builtin="checker" mark="edge"
@@ -29,7 +24,7 @@
 
             <!-- 底盘（位于车轮中心高度） -->
             <body name="chassis" pos="0 0 0">
-                <inertial pos="0.0 0.079 0.0" quat="0.707107 0 0 0.707107"
+                <inertial pos="0.0 -0.06 0.0" quat="0.707107 0 0 0.707107"
                           mass="37.8" diaginertia="0.75 1.35 1.60"/>
                 <geom type="box" size="0.35 0.20 0.02" material="body_mat"/>
             </body>
@@ -41,28 +36,17 @@
                 <geom type="box" size="0.045 0.02 0.52" pos="0 0.18 0.52" material="body_mat"/>
                 <geom type="box" size="0.3 0.02 0.02" pos="0 0.18 1.04" material="body_mat"/>
 
-<!--                  球包：高120cm，位于杆后方偏上-->
-<!--                <body name="golf_bag" pos="0 0.35 0.6">-->
-<!--                    <inertial pos="0 0 0" mass="10.0" diaginertia="1.10 1.10 0.10"/>-->
-<!--                    <geom type="cylinder" size="0.15 0.6" material="bag_mat"/>-->
-<!--                </body>-->
-
-<!--                &lt;!&ndash; 增加一个球包挂点，让球包可以在转弯时模拟左右摇晃 &ndash;&gt;-->
-<!--                <body name="bag_mount" pos="0 0.35 1.2">  &lt;!&ndash; 0 0 1.2是中心位置 0 0.35 1.2是球包挂前面 &ndash;&gt;-->
-<!--                    &lt;!&ndash; 左右摆动 &ndash;&gt;-->
-<!--                    <joint name="bag_swing" type="hinge" axis="0 1 0" limited="true"-->
-<!--                           range="-0.05 0.05" damping="2"/>-->
-<!--                    &lt;!&ndash; 球包 &ndash;&gt;-->
-<!--                    <body name="golf_bag" pos="0 0 -0.6">-->
-<!--                        <inertial pos="0 0 0" mass="10" diaginertia="1.10 1.10 0.10"/>-->
-<!--                        <geom type="cylinder" size="0.15 0.6" material="bag_mat"/>-->
-<!--                    </body>-->
-<!--                </body>-->
-            </body>
-
-            <body name="golf_bag" pos="0.35 -0.3 0.5" quat="0.40 -0.2588 0 0">
-                <inertial pos="0 0 0" mass="10" diaginertia="1.10 1.10 0.10"/>
-                <geom type="cylinder" size="0.13 0.44" material="bag_mat"/>
+                <!-- 增加一个球包挂点，让球包可以在转弯时模拟左右摇晃 -->
+                <body name="bag_mount" pos="0 0.35 1.2">  <!-- 0 0 1.2是中心位置 0 0.35 1.2是球包挂前面 -->
+                    <!-- 左右摆动 -->
+                    <joint name="bag_swing" type="hinge" axis="0 1 0" limited="true"
+                           range="-0.05 0.05" damping="2"/>
+                    <!-- 球包 -->
+                    <body name="golf_bag" pos="0 0 -0.6">
+                        <inertial pos="0 0 0" mass="10" diaginertia="1.10 1.10 0.10"/>
+                        <geom type="cylinder" size="0.15 0.6" material="bag_mat"/>
+                    </body>
+                </body>
             </body>
 
             <!-- 左轮：直径48cm，宽18cm，位置x=-0.35 -->
