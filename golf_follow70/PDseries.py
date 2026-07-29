@@ -22,6 +22,11 @@ SPEED_KP = 0.288
 SPEED_KD = 0.0255
 SPEED_KI = 0.0
 SPEED_INT_LIMIT = 10.0
+# ★ 串级外环（速度环）输出限幅：限制其对 pitch_target 的最大贡献（rad）。
+#   没有这层限幅时，KP 项（0.21×2m/s≈24°）+ KI 积分（0.08×10=46°）叠加在
+#   轻载 -33° 大平衡角上会把 pitch_target 顶死到 ±45° 总钳位 → 车身近乎横躺、
+#   球包蹭地，只能龟速爬行（轻包 3m/s 跟随发散的根因）。
+SPEED_CORR_LIMIT = np.deg2rad(14)
 
 FEEDFORWARD_TORQUE = 0
 
@@ -135,6 +140,15 @@ class SegwayPID:
         speed_correction = (SPEED_KP * vel_error
                             + SPEED_KI * self.speed_error_integral
                             + SPEED_KD * vel_dot)
+        # ★ 外环输出限幅 + 抗积分饱和（back-calculation）：
+        #   输出被钳住时把积分回退到「刚好饱和」的水平，避免积分继续堆积
+        #   导致松开后大幅过冲（轻包 5m/s 冲过头的根因之一）。
+        corr_clamped = clamp(speed_correction, -SPEED_CORR_LIMIT, SPEED_CORR_LIMIT)
+        if SPEED_KI > 0.0 and corr_clamped != speed_correction:
+            self.speed_error_integral -= (speed_correction - corr_clamped) / SPEED_KI
+            self.speed_error_integral = clamp(self.speed_error_integral,
+                                              -SPEED_INT_LIMIT, SPEED_INT_LIMIT)
+        speed_correction = corr_clamped
 
         pitch_target = speed_correction + self.balance_pitch
         # ★ ±45°：给大平衡角（轻载 -33°）之上留出速度环修正空间（旧 ±30° 会钳死）

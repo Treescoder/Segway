@@ -42,20 +42,21 @@ class WalkingHumanTrajectory:
         self.v = 0.0     # 从静止自然起步（现实行人不会瞬间达到步速；也让车能同步起步不被拉开）
         self.omega = 0.0
 
-        # ========================= 速度参数 =========================
-        self.v_min = 1.3
-        self.v_max = 2.6
-        self.a_max = 0.6
+        # ==================== 速度参数（0~3 m/s 全速域覆盖，2026-07-29） ====================
+        # 需求：实际控制中人的速度 0~3 m/s 全覆盖（原 1.0~1.8 漫步区间只测中速段）。
+        self.v_min = 0.0
+        self.v_max = 3.0
+        self.a_max = 0.5
 
-        # ==================== 角速度参数（高曲率） ====================
-        self.w_max = 0.55
-        self.alpha_max = 1.2
+        # ==================== 角速度参数（自然漫步，平缓转向） ====================
+        self.w_max = 0.35
+        self.alpha_max = 0.6
 
-        self.w_base_amp = 0.35
-        self.w_base_freq = 0.03
+        self.w_base_amp = 0.16
+        self.w_base_freq = 0.012
 
-        self.w_drift_amp = 0.15
-        self.w_drift_freq = 0.008
+        self.w_drift_amp = 0.10
+        self.w_drift_freq = 0.035
 
         # ========================= 虚拟目标点 =========================
         self.follow_dist = 3.0
@@ -66,18 +67,20 @@ class WalkingHumanTrajectory:
     def step(self):
         """推进一个时间步，返回 dict 供控制直接使用"""
 
-        # ---------- 平滑速度 ----------
-        v_target = 1.9 + 0.4 * np.sin(0.05 * self.time)
+        # ---------- 平滑速度（0~3 m/s 全速域缓慢扫掠：走停→漫步→快走→慢跑） ----------
+        # 多频正弦叠加：主周期 80s 扫 0→3→0，副频加自然波动；加速度限幅保证平滑。
+        v_target = (1.5 + 1.35 * np.sin(2 * np.pi * 0.0125 * self.time)
+                    + 0.30 * np.sin(2 * np.pi * 0.027 * self.time + 0.5))
+        v_target = float(np.clip(v_target, self.v_min, self.v_max))
         dv = np.clip(v_target - self.v, -self.a_max * self.dt, self.a_max * self.dt)
         self.v += dv
-        # 起步 4s 内允许低于 v_min（从 0 平滑加速）；之后正常限幅防止走走停停
-        lo = self.v_min if self.time > 4.0 else 0.0
-        self.v = np.clip(self.v, lo, self.v_max)
+        self.v = np.clip(self.v, self.v_min, self.v_max)
 
-        # ---------- 强曲率角速度 ----------
+        # ---------- 平缓转向（多频叠加的自然漫步，不再剧烈蛇形） ----------
         w_des = (
             self.w_base_amp * np.sin(2 * np.pi * self.w_base_freq * self.time)
             + self.w_drift_amp * np.sin(2 * np.pi * self.w_drift_freq * self.time + 1.3)
+            + 0.06 * np.sin(2 * np.pi * 0.006 * self.time + 0.7)
         )
         dw = np.clip(w_des - self.omega, -self.alpha_max * self.dt, self.alpha_max * self.dt)
         self.omega += dw
@@ -125,16 +128,24 @@ class Pedestrian:
     APPROACH_A = 1.0285  # 防过冲制动减速度 m/s²（限制远处「超出跟随速度的额外接近速度」，从源头消除起步猛加速→冲过头）
     REVERSE_BRAKE = 2.2  # 越界时强制后退拉开距离的最大速度 m/s²（哪怕牺牲 pitch 稳定也要保安全）
 
-    # ---------------- 可调参数（步态动画） ----------------
-    STEP_LENGTH = 0.6     # 每步长度 m
-    STEP_FREQ_GAIN = 1.5  # 相位增益（原代码系数）
-    HIP_AMP = 0.4
-    KNEE_AMP = 0.6
-    ANKLE_AMP = 0.3
-    BODY_HEIGHT = 1.3     # mocap z 高度
+    # ---------------- 步进 / 步态动画参数 ----------------
+    STEP_LENGTH = 0.6      # 单步长度 m（步频 = 速度 / (2·步长)，与真人对齐）
+    HIP_AMP = 0.45         # 髋关节前后摆幅 rad（≈±26°）
+    KNEE_AMP = 0.7         # 膝关节屈曲峰值 rad（摆动相屈曲）
+    ANKLE_AMP = 0.22       # 踝关节微调 rad
+    ARM_AMP = 0.45         # 手臂前后摆幅 rad（与对侧腿反相，真人协调）
+    SHOULDER_BASE = 0.30   # 手臂自然下垂基准角 rad（略向后下垂）
+    ELBOW_BEND = 0.30      # 肘部自然微屈基准 rad
+    ELBOW_SWING = 0.18     # 摆臂时肘部额外屈伸 rad
+    BOB_AMP = 0.025        # 行走竖直起伏 m（2×步频）
 
+    BODY_HEIGHT = 1.30     # mocap 根节点 z 高度
+
+    # 驱动关节：腿 6 + 手臂 4（每个控制步写入 qpos 并清零 qvel，避免能量注入）
     JOINT_NAMES = ["right_hip_y", "right_knee", "right_ankle_x",
-                   "left_hip_y", "left_knee", "left_ankle_x"]
+                   "left_hip_y", "left_knee", "left_ankle_x",
+                   "right_shoulder", "right_elbow",
+                   "left_shoulder", "left_elbow"]
 
     def __init__(self, model, data, dt):
         import mujoco  # 局部引入，避免模块被非 mujoco 环境导入时报错
@@ -182,19 +193,20 @@ class Pedestrian:
     def update(self):
         """
         行人前进一个控制周期：
-        推进轨迹 → 更新 mocap 位姿 → 步态相位累加 → 更新腿关节
+        推进轨迹 → 步态相位累加（与速度匹配）→ 更新 mocap 位姿（含起伏）→ 更新肢体关节
         返回轨迹 info dict
         """
         info = self.traj.step()
         self._last_info = info
 
+        # 步频与速度匹配：每秒完整步态周期数 = v / (2·步长)
+        # （旧版 STEP_FREQ_GAIN=1.5 使步频快了约 1.5 倍，像小碎步狂奔，已修正）
+        v = info["human_speed"]
+        stride_freq = v / (2.0 * self.STEP_LENGTH)
+        self.phase += 2.0 * np.pi * stride_freq * self.dt
+
         self._write_mocap(info["human_pos"], info["human_heading"])
-
-        # 步态相位与速度成正比
-        self.phase += (self.STEP_FREQ_GAIN * 2 * np.pi *
-                       info["human_speed"] * self.dt / self.STEP_LENGTH)
         self._animate(self.phase)
-
         return info
 
     # ------------------------------------------------------------
@@ -297,33 +309,47 @@ class Pedestrian:
 
     # ------------------------------------------------------------
     def _write_mocap(self, pos_xy, heading):
-        """把行人位置与朝向写入 mocap"""
+        """把行人位置与朝向写入 mocap（含行走竖直起伏）"""
+        # 竖直起伏：2×步频，支撑中期（双腿承重）身体最高，摆动中期最低
+        bob = -self.BOB_AMP * math.cos(2.0 * self.phase)
         self.data.mocap_pos[self.mocap_id] = np.array(
-            [pos_xy[0], pos_xy[1], self.BODY_HEIGHT])
+            [pos_xy[0], pos_xy[1], self.BODY_HEIGHT + bob])
         half = heading / 2.0
         self.data.mocap_quat[self.mocap_id] = np.array(
-            [np.cos(half), 0.0, 0.0, np.sin(half)])
+            [np.cos(half), 0.0, 0.0, math.sin(half)])
 
     # ------------------------------------------------------------
     def _animate(self, phase):
         """
-        6 关节正弦步态（原 animate_human_pose 迁移）。
+        协调步态 + 摆臂动画（每控制步调用一次）。
+          - 双腿反相（左 = 右 + π），膝关节在摆动相平滑屈曲（钟形，连续可导）
+          - 双臂与对侧腿反相摆动（真人协调方式），肘部随摆臂微屈
+          - 竖直起伏已在 _write_mocap 中叠加到 mocap 根
         注意：直接改写 qpos 的同时必须把对应 qvel 清零，
-        否则积分器会把虚假速度能量注入被动关节链（abdomen 等），导致仿真发散。
+        否则积分器会把虚假速度能量注入被动关节链，导致仿真发散。
         """
         qp = self.joint_qpos
-        s_r = np.sin(0.5 * phase)            # 右腿
-        s_l = np.sin(0.5 * phase + np.pi)    # 左腿
+        s = np.sin(phase)          # 右腿 / 对侧(左)臂 参考相位
+        c = np.cos(phase)
 
-        # ---------- 右腿 ----------
-        self.data.qpos[qp["right_hip_y"]] = -self.HIP_AMP * s_r
-        self.data.qpos[qp["right_knee"]] = -self.KNEE_AMP * max(0.0, s_r)
-        self.data.qpos[qp["right_ankle_x"]] = self.ANKLE_AMP * s_r
+        # ---------- 右腿（hip=-A·s，与左腿反相） ----------
+        self.data.qpos[qp["right_hip_y"]] = -self.HIP_AMP * s
+        # 膝关节：摆动相（右腿向前摆）屈曲，钟形连续；相位落后 hip 约 π/2
+        self.data.qpos[qp["right_knee"]] = -self.KNEE_AMP * (0.5 - 0.5 * np.cos(phase + np.pi / 2))
+        self.data.qpos[qp["right_ankle_x"]] = self.ANKLE_AMP * (0.4 * s)
 
-        # ---------- 左腿 ----------
-        self.data.qpos[qp["left_hip_y"]] = -self.HIP_AMP * s_l
-        self.data.qpos[qp["left_knee"]] = -self.KNEE_AMP * max(0.0, s_l)
-        self.data.qpos[qp["left_ankle_x"]] = -self.ANKLE_AMP * s_l
+        # ---------- 左腿（hip=+A·s，右腿反相） ----------
+        self.data.qpos[qp["left_hip_y"]] = self.HIP_AMP * s
+        self.data.qpos[qp["left_knee"]] = -self.KNEE_AMP * (0.5 - 0.5 * np.cos(phase + np.pi / 2 + np.pi))
+        self.data.qpos[qp["left_ankle_x"]] = -self.ANKLE_AMP * (0.4 * s)
+
+        # ---------- 摆臂：与同侧腿反相（真人协调：右臂前摆时右腿在后） ----------
+        # 右臂 = 基准 + 与右腿(-A·s)反相的摆幅(+A·s)；肘部随摆臂微屈
+        self.data.qpos[qp["right_shoulder"]] = self.SHOULDER_BASE + self.ARM_AMP * s
+        self.data.qpos[qp["right_elbow"]] = self.ELBOW_BEND + self.ELBOW_SWING * max(0.0, s)
+        # 左臂：与右臂反相（= 与左腿反相）
+        self.data.qpos[qp["left_shoulder"]] = self.SHOULDER_BASE - self.ARM_AMP * s
+        self.data.qpos[qp["left_elbow"]] = self.ELBOW_BEND + self.ELBOW_SWING * max(0.0, -s)
 
         # ---------- 清零被驱动关节的速度，防止能量注入 ----------
         for dof in self.joint_dof.values():

@@ -75,6 +75,32 @@ def equilibrium_pitch_deg(model):
     return float(np.degrees(np.arctan2(rel[1], rel[2])))
 
 
+def _sched(bag_kg, light, heavy, lo=1.5, hi=10.0):
+    """按球包质量在 light(1.5kg) / heavy(10kg) 锚点间线性插值（超界夹紧）"""
+    a = max(0.0, min(1.0, (float(bag_kg) - lo) / (hi - lo)))
+    return light + (heavy - light) * a
+
+
+def apply_follow_gains(bag_kg):
+    """质量调度的跟随环增益（2026-07-29，0~3m/s 全速域 × 1.5~10kg 无头台联合验证）。
+    物理依据：车体组合重心到轮轴杠杆臂 1.5kg≈2.6cm、10kg≈13.6cm，倒立摆持续
+    加/减速能力与杠杆成正比 → 轻包实测仅 ~0.2 m/s²（重包 ~1.5+）。
+    因此轻包端必须：追赶余量小（APPROACH_A 压到真实刹车能力）、硬安全线提前
+    （D_SAFE_RATIO 0.63）、距离环温和（KP/KI 低）；重包端可紧跟（rmse≈0.2m）。
+    验证结果（sweep 0→3→0 m/s，80s）：1.5~10kg min_d 全部 ≥1.5m，无翻车。"""
+    import PDseries as P
+    from pedestrian import Pedestrian as Ped
+    Ped.KP = _sched(bag_kg, 0.30, 0.9095)
+    Ped.KI = _sched(bag_kg, 0.03, 0.2184)
+    Ped.KD = 0.0411
+    Ped.FF_GAIN = 1.0
+    Ped.V_MAX = _sched(bag_kg, 3.15, 3.5)     # 3m/s 人速全覆盖（原 2.33 会钳死）
+    Ped.APPROACH_A = _sched(bag_kg, 0.06, 0.6214)
+    Ped.D_SAFE_RATIO = _sched(bag_kg, 0.63, 0.50)
+    Ped.REVERSE_BRAKE = 3.5
+    UpdateSimThread.RAMP_SAFE = 4.0
+
+
 def apply_profile(model):
     """按构型档案覆盖 底盘重心 / 平衡角锚 / 控制增益（COM012 档全部保持文件默认，不动）"""
     import PDseries as P
@@ -102,12 +128,13 @@ def apply_profile(model):
           f"锚(解析平衡角)={eq_deg:+.2f}°  窗=±0.75°")
     # --- 平衡/偏航增益（params_fullmass2.json，1.5~10kg 六质量点联合训练 2026-07-28） ---
     P.PITCH_KP, P.PITCH_KD, P.PITCH_KI = 270.95, 47.47, 154.03
-    P.SPEED_KP, P.SPEED_KI, P.SPEED_KD = 0.2133, 0.0, 0.00877
+    # ★ SPEED_KI=0.08（2026-07-29）：没有速度环积分时任何质量都到不了 3m/s（稳态滞差），
+    #   配合 PDseries 新增的外环输出限幅 SPEED_CORR_LIMIT + 抗积分饱和使用。
+    P.SPEED_KP, P.SPEED_KI, P.SPEED_KD = 0.2133, 0.08, 0.00877
     P.YAW_KP, P.YAW_KD = 120.0, 126.21
     P.BALANCE_ALPHA = 0.004444
-    # --- 跟随环 ---
-    Ped.KP, Ped.KI, Ped.KD = 0.9095, 0.2184, 0.0411
-    Ped.FF_GAIN, Ped.V_MAX, Ped.APPROACH_A = 1.20, 2.3284, 0.6214
+    # --- 跟随环（质量调度，0~3m/s 全速域） ---
+    apply_follow_gains(model.body_mass[model.body('golf_bag').id])
     # --- 斜坡 ---
     UpdateSimThread.RAMP_GENTLE = 1.2044
     UpdateSimThread.GATE_BRAKE = 2.7694
@@ -509,7 +536,10 @@ class Window(QMainWindow):
             P.BALANCE_PITCH_INIT = np.deg2rad(eq_deg)
             P.BALANCE_PITCH_MIN = np.deg2rad(eq_deg - 0.75)
             P.BALANCE_PITCH_MAX = np.deg2rad(eq_deg + 0.75)
-            print(f"[BagMass] {bm:.2f}kg → 锚(解析平衡角)={eq_deg:+.2f}°  窗=±0.75°")
+            # 跟随环增益随质量同步调度（轻包物理刹车能力弱 → 追赶余量/安全线同步收紧）
+            apply_follow_gains(model_mass)
+            print(f"[BagMass] {bm:.2f}kg → 锚(解析平衡角)={eq_deg:+.2f}°  窗=±0.75°  "
+                  f"跟随环已按质量调度")
 
     def _on_speed_slider(self, v):
         self.speed_value_label.setText(f"{(v / 1000) * 3.6:.1f} km/h")
