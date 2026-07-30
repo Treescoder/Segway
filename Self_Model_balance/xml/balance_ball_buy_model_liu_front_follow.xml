@@ -46,7 +46,7 @@
                 <geom type="sphere" size="0.03" pos="0 0.18 0.9" rgba="0 0 0 1" />
 
 <!--             球包：高120cm，位于杆后方偏上-->
-                <body name="golf_bag" pos="0 0.35 0.5">
+                <body name="golf_bag" pos="0 0.20 0.5">
                     <inertial pos="0 0 0" mass="10.0"
                               diaginertia="1.10 1.10 0.10"/>
                     <geom type="cylinder" size="0.15 0.5" material="bag_mat"/>

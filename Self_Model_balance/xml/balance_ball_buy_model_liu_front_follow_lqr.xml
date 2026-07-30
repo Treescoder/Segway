@@ -1,0 +1,163 @@
+<mujoco model="golf_balance_tracking">
+
+    <compiler angle="radian"/>
+    <size njmax="500" nconmax="100"/>
+    <option gravity="0 0 -9.81" viscosity="0.002"/>
+
+    <!-- ============ 材质 ============ -->
+    <asset>
+        <texture type="2d" name="wheel_texture" builtin="checker" mark="edge"
+                 rgb1="1 1 1" rgb2="1 0.3 0.3"
+                 markrgb="0.3 0.3 0.3" width="1024" height="1024"/>
+        <material name="wheel_mat" texture="wheel_texture" texuniform="true" texrepeat="5 5"/>
+
+        <texture type="2d" name="body_texture" builtin="gradient" rgb1="1 1 1"
+                 rgb2="1 0.3 0.3" width="512" height="512"/>
+        <material name="body_mat" texture="body_texture" texrepeat="4 2" shininess="0.3"/>
+
+        <texture type="2d" name="bag_texture" builtin="gradient" rgb1="1 1 1"
+                 rgb2="0 0.5 0.3" width="256" height="256"/>
+        <material name="bag_mat" texture="bag_texture" texrepeat="4 2" shininess="0.3"/>
+
+        <!-- 地面草地纹理 -->
+        <texture type="2d" name="ground_texture" builtin="checker"
+                 rgb1="0.22 0.45 0.22" rgb2="0.28 0.52 0.28"
+                 width="512" height="512"/>
+        <material name="ground_mat" texture="ground_texture" texrepeat="40 40"
+                  reflectance="0.1" shininess="0.0"/>
+    </asset>
+
+    <worldbody>
+        <!-- ============ 高尔夫球车（双轮差速平衡车） ============ -->
+        <body name="segway" pos="0 0 0.24">
+            <joint name="segway_free" type="free" damping="0.05"/>
+
+            <!-- 底盘 -->
+            <body name="chassis" pos="0 0 0">
+                <inertial pos="0.0 -0.05 0.0" quat="0.707107 0 0 0.707107"
+                          mass="37.8" diaginertia="0.75 1.35 1.60"/>
+                <geom type="box" size="0.35 0.20 0.02" material="body_mat"/>
+            </body>
+
+            <!-- 车把 -->
+            <body name="handlebar" pos="0 0 0.02">
+                <!-- 立柱/把手几何中心约在 y=0.18,z=0.52；惯性中心不能放在轮轴 -->
+                <inertial pos="0.0 0.18 0.52" quat="0.707107 0 0 0.707107"
+                          mass="5.0" diaginertia="0.5 0.45 0.05"/>
+                <geom type="box" size="0.051 0.016 0.52" pos="0 0.18 0.52" material="body_mat"/>
+                <!-- 把手 -->
+                <geom type="cylinder" size="0.025 0.22" pos="0 0.18 1.04"
+                      quat="0.707107 0 0.707107 0" material="body_mat"/>
+                <!-- 摄像头装在车把的 -Y（人）侧，朝 -Y 跟踪 -->
+                <geom type="sphere" size="0.03" pos="0 0.14 0.9" rgba="0 0 0 1"/>
+                <camera name="person_tracking_camera" pos="0 0.14 0.9"
+                        xyaxes="-1 0 0 0 0 1" fovy="110"/>
+
+                <!-- 沿 -Y 到 +Y 的站位：人/摄像头 - 车把 - 球包 -->
+                <body name="golf_bag" pos="0 0.35 0.5">
+                    <inertial pos="0 0 0" mass="10.0"
+                              diaginertia="1.10 1.10 0.10"/>
+                    <geom type="cylinder" size="0.15 0.5" material="bag_mat"/>
+                </body>
+            </body>
+
+            <!-- 左轮 -->
+            <body name="l_wheel" pos="-0.35 0 0">
+                <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5"
+                          mass="4.5" diaginertia="0.085 0.043 0.043"/>
+                <joint name="torso_l_wheel" type="hinge" pos="0 0 0" axis="-1 0 0" damping="0.02"/>
+                <geom type="cylinder" size="0.24 0.09" quat="0.707107 0 0.707107 0"
+                      material="wheel_mat" contype="2" conaffinity="1" friction="1 0.005 0.0001"/>
+            </body>
+
+            <!-- 右轮 -->
+            <body name="r_wheel" pos="0.35 0 0">
+                <inertial pos="0 0 0" quat="0.5 0.5 -0.5 0.5"
+                          mass="4.5" diaginertia="0.085 0.043 0.043"/>
+                <joint name="torso_r_wheel" type="hinge" pos="0 0 0" axis="-1 0 0" damping="0.02"/>
+                <geom type="cylinder" size="0.24 0.09" quat="0.707107 0 0.707107 0"
+                      material="wheel_mat" contype="2" conaffinity="1" friction="1 0.005 0.0001"/>
+            </body>
+        </body>
+
+        <!-- ============ 带肩、肘、髋、膝关节的人体 ============ -->
+        <body name="person" mocap="true" pos="0 -4.5 0">
+            <geom type="capsule" fromto="0 0 0.82 0 0 1.40" size="0.13"
+                  rgba="0.15 0.45 0.85 1" contype="0" conaffinity="0"/>
+            <geom type="capsule" fromto="0 0 1.40 0 0 1.50" size="0.05"
+                  rgba="0.95 0.78 0.6 1" contype="0" conaffinity="0"/>
+            <geom type="sphere" size="0.10" pos="0 0 1.59"
+                  rgba="0.95 0.78 0.6 1" contype="0" conaffinity="0"/>
+            <geom type="sphere" size="0.105" pos="0 0 1.65"
+                  rgba="0.2 0.15 0.1 1" contype="0" conaffinity="0"/>
+
+            <body name="human_l_upper_arm" pos="0.16 0 1.34">
+                <joint name="human_l_shoulder" type="hinge" axis="1 0 0"
+                       limited="true" range="-1.2 1.2" damping="1.0"/>
+                <geom type="capsule" fromto="0 0 0 0 0 -0.30" size="0.05"
+                      rgba="0.15 0.45 0.85 1" contype="0" conaffinity="0"/>
+                <body name="human_l_forearm" pos="0 0 -0.30">
+                    <joint name="human_l_elbow" type="hinge" axis="1 0 0"
+                           limited="true" range="0 1.4" damping="0.8"/>
+                    <geom type="capsule" fromto="0 0 0 0 0 -0.27" size="0.04"
+                          rgba="0.95 0.78 0.6 1" contype="0" conaffinity="0"/>
+                </body>
+            </body>
+            <body name="human_r_upper_arm" pos="-0.16 0 1.34">
+                <joint name="human_r_shoulder" type="hinge" axis="1 0 0"
+                       limited="true" range="-1.2 1.2" damping="1.0"/>
+                <geom type="capsule" fromto="0 0 0 0 0 -0.30" size="0.05"
+                      rgba="0.15 0.45 0.85 1" contype="0" conaffinity="0"/>
+                <body name="human_r_forearm" pos="0 0 -0.30">
+                    <joint name="human_r_elbow" type="hinge" axis="1 0 0"
+                           limited="true" range="0 1.4" damping="0.8"/>
+                    <geom type="capsule" fromto="0 0 0 0 0 -0.27" size="0.04"
+                          rgba="0.95 0.78 0.6 1" contype="0" conaffinity="0"/>
+                </body>
+            </body>
+            <body name="human_l_thigh" pos="0.08 0 0.84">
+                <joint name="human_l_hip" type="hinge" axis="1 0 0"
+                       limited="true" range="-1.1 1.1" damping="1.5"/>
+                <geom type="capsule" fromto="0 0 0 0 0 -0.40" size="0.065"
+                      rgba="0.12 0.12 0.35 1" contype="0" conaffinity="0"/>
+                <body name="human_l_shin" pos="0 0 -0.40">
+                    <geom type="capsule" fromto="0 0 0 0 0 -0.39" size="0.055"
+                          rgba="0.12 0.12 0.35 1" contype="0" conaffinity="0"/>
+                    <geom type="box" size="0.055 0.11 0.03" pos="0 0.07 -0.40"
+                          rgba="0.05 0.05 0.05 1" contype="0" conaffinity="0"/>
+                </body>
+            </body>
+            <body name="human_r_thigh" pos="-0.08 0 0.84">
+                <joint name="human_r_hip" type="hinge" axis="1 0 0"
+                       limited="true" range="-1.1 1.1" damping="1.5"/>
+                <geom type="capsule" fromto="0 0 0 0 0 -0.40" size="0.065"
+                      rgba="0.12 0.12 0.35 1" contype="0" conaffinity="0"/>
+                <body name="human_r_shin" pos="0 0 -0.40">
+                    <geom type="capsule" fromto="0 0 0 0 0 -0.39" size="0.055"
+                          rgba="0.12 0.12 0.35 1" contype="0" conaffinity="0"/>
+                    <geom type="box" size="0.055 0.11 0.03" pos="0 0.07 -0.40"
+                          rgba="0.05 0.05 0.05 1" contype="0" conaffinity="0"/>
+                </body>
+            </body>
+        </body>
+
+    </worldbody>
+
+    <actuator>
+        <motor name="motor_l_wheel" joint="torso_l_wheel" gear="1" ctrllimited="true" ctrlrange="-80 80"/>
+        <motor name="motor_r_wheel" joint="torso_r_wheel" gear="1" ctrllimited="true" ctrlrange="-80 80"/>
+        <position name="human_l_shoulder_act" joint="human_l_shoulder" kp="80"
+                  ctrllimited="true" ctrlrange="-1.2 1.2"/>
+        <position name="human_r_shoulder_act" joint="human_r_shoulder" kp="80"
+                  ctrllimited="true" ctrlrange="-1.2 1.2"/>
+        <position name="human_l_elbow_act" joint="human_l_elbow" kp="60"
+                  ctrllimited="true" ctrlrange="0 1.4"/>
+        <position name="human_r_elbow_act" joint="human_r_elbow" kp="60"
+                  ctrllimited="true" ctrlrange="0 1.4"/>
+        <position name="human_l_hip_act" joint="human_l_hip" kp="120"
+                  ctrllimited="true" ctrlrange="-1.1 1.1"/>
+        <position name="human_r_hip_act" joint="human_r_hip" kp="120"
+                  ctrllimited="true" ctrlrange="-1.1 1.1"/>
+    </actuator>
+
+</mujoco>

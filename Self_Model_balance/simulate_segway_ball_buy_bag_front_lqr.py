@@ -19,13 +19,15 @@ format.setStencilBufferSize(8)
 format.setSamples(4)
 format.setSwapInterval(1)
 format.setSwapBehavior(QSurfaceFormat.SwapBehavior.DoubleBuffer)
-format.setVersion(2,0)
+format.setVersion(2, 0)
 format.setRenderableType(QSurfaceFormat.RenderableType.OpenGL)
 format.setProfile(QSurfaceFormat.CompatibilityProfile)
 QSurfaceFormat.setDefaultFormat(format)
 
+
 class Viewport(QOpenGLWindow):
     updateRuntime = Signal(float)
+
     def __init__(self, model, data, cam, opt, scn):
         super().__init__()
         self.model, self.data, self.cam, self.opt, self.scn = model, data, cam, opt, scn
@@ -39,21 +41,36 @@ class Viewport(QOpenGLWindow):
         self.timer.start()
         self.body_id = model.body('segway').id
 
-    def mousePressEvent(self, e): self.__last_pos = e.position()
+    def mousePressEvent(self, e):
+        self.__last_pos = e.position()
+
     def mouseMoveEvent(self, e):
-        if e.buttons() & Qt.MouseButton.RightButton: act = mujoco.mjtMouse.mjMOUSE_MOVE_V
-        elif e.buttons() & Qt.MouseButton.LeftButton: act = mujoco.mjtMouse.mjMOUSE_ROTATE_V
-        elif e.buttons() & Qt.MouseButton.MiddleButton: act = mujoco.mjtMouse.mjMOUSE_ZOOM
-        else: return
+        if e.buttons() & Qt.MouseButton.RightButton:
+            act = mujoco.mjtMouse.mjMOUSE_MOVE_V
+        elif e.buttons() & Qt.MouseButton.LeftButton:
+            act = mujoco.mjtMouse.mjMOUSE_ROTATE_V
+        elif e.buttons() & Qt.MouseButton.MiddleButton:
+            act = mujoco.mjtMouse.mjMOUSE_ZOOM
+        else:
+            return
         p = e.position()
-        dx, dy = p.x()-self.__last_pos.x(), p.y()-self.__last_pos.y()
-        mujoco.mjv_moveCamera(self.model, act, dx/self.height, dy/self.height, self.scn, self.cam)
+        dx, dy = p.x() - self.__last_pos.x(), p.y() - self.__last_pos.y()
+        mujoco.mjv_moveCamera(self.model, act, dx / self.height, dy / self.height, self.scn, self.cam)
         self.__last_pos = p
+
     def wheelEvent(self, e):
-        mujoco.mjv_moveCamera(self.model, mujoco.mjtMouse.mjMOUSE_ZOOM, 0, -0.0005*e.angleDelta().y(), self.scn, self.cam)
-    def initializeGL(self): self.con = mujoco.MjrContext(self.model, mujoco.mjtFontScale.mjFONTSCALE_100)
-    def resizeGL(self, w, h): self.width, self.height = w, h
-    def setScreenScale(self, f): self.scale = f
+        mujoco.mjv_moveCamera(self.model, mujoco.mjtMouse.mjMOUSE_ZOOM, 0, -0.0005 * e.angleDelta().y(), self.scn,
+                              self.cam)
+
+    def initializeGL(self):
+        self.con = mujoco.MjrContext(self.model, mujoco.mjtFontScale.mjFONTSCALE_100)
+
+    def resizeGL(self, w, h):
+        self.width, self.height = w, h
+
+    def setScreenScale(self, f):
+        self.scale = f
+
     def paintGL(self):
         body_pos = self.data.xpos[self.body_id]
         self.cam.lookat = body_pos.copy()
@@ -62,12 +79,16 @@ class Viewport(QOpenGLWindow):
         screen = self.screen()
         if screen is not None:
             self.scale = screen.devicePixelRatio()
-        vp = mujoco.MjrRect(0,0,int(self.width*self.scale),int(self.height*self.scale))
+        vp = mujoco.MjrRect(0, 0, int(self.width * self.scale), int(self.height * self.scale))
         mujoco.mjr_render(vp, self.scn, self.con)
-        self.runtime.append(time.time()-t)
+        self.runtime.append(time.time() - t)
         self.updateRuntime.emit(np.average(self.runtime))
 
+
 class UpdateSimThread(QThread):
+    # 固定的底盘质心偏移（Y方向，负值向后移）
+    FIXED_COM_OFFSET_Y = -0.05
+
     def __init__(self, model, data, parent=None):
         super().__init__(parent)
         self.model, self.data = model, data
@@ -80,19 +101,32 @@ class UpdateSimThread(QThread):
         self.body_id = model.body('segway').id
         self.l_dof = model.jnt_dofadr[model.joint('torso_l_wheel').id]
         self.r_dof = model.jnt_dofadr[model.joint('torso_r_wheel').id]
+
+        # 底盘质心偏移
+        self.chassis_body_id = model.body('chassis').id
+        self.default_chassis_ipos = model.body_ipos[self.chassis_body_id].copy()
+
+        # 球包质量默认值
+        self.default_bag_mass = 8.9
+        self.bag_mass = self.default_bag_mass
+
         self.reset()
         self.last_print_time = 0.0
 
     @property
-    def real_time(self): return time.monotonic_ns() - self.real_time_start
+    def real_time(self):
+        return time.monotonic_ns() - self.real_time_start
 
     def run(self):
         while self.running:
-            if self.data.time < self.real_time/1e9:
-                if (time.monotonic_ns()-self.last_robot_update)/1e9 >= 0.005:
+            if self.data.time < self.real_time / 1e9:
+                if (time.monotonic_ns() - self.last_robot_update) / 1e9 >= 0.005:
                     self.last_robot_update = time.monotonic_ns()
                     self.update_speed_ref()
                     self.update_yaw_ref()
+                    # 应用固定的底盘质心偏移
+                    self._apply_com_offset()
+                    # 控制器更新
                     self.robot.set_velocity(self.speed_ref)
                     self.robot.set_yaw(self.yaw_ref)
                     self.robot.update()
@@ -103,6 +137,12 @@ class UpdateSimThread(QThread):
             else:
                 time.sleep(0.00001)
 
+    def _apply_com_offset(self):
+        """始终写入固定的偏移值"""
+        ipos = self.model.body_ipos[self.chassis_body_id].copy()
+        ipos[1] = self.FIXED_COM_OFFSET_Y
+        self.model.body_ipos[self.chassis_body_id] = ipos
+
     def _print_debug_info(self):
         try:
             quat = self.data.xquat[self.body_id]
@@ -110,11 +150,12 @@ class UpdateSimThread(QThread):
             euler = rot.as_euler('xyz', degrees=True)
             pitch, roll, yaw = euler[0], euler[1], euler[2]
             l_vel, r_vel = self.data.qvel[self.l_dof], self.data.qvel[self.r_dof]
-            actual_speed = (l_vel+r_vel) / 2 * 0.24
+            actual_speed = (l_vel + r_vel) / 2 * 0.24
             l_ctrl, r_ctrl = self.data.ctrl[0], self.data.ctrl[1]
             print(f"[t={self.data.time:.2f}s] pitch={pitch:6.2f}° roll={roll:6.2f}° yaw={yaw:6.2f}° | "
                   f"actual_speed={actual_speed:6.3f} m/s | target_speed={self.speed_ref:5.2f} m/s | "
-                  f"L_vel={l_vel:6.2f} R_vel={r_vel:6.2f} | ctrl=({l_ctrl:6.2f},{r_ctrl:6.2f})")
+                  f"L_vel={l_vel:6.2f} R_vel={r_vel:6.2f} | ctrl=({l_ctrl:6.2f},{r_ctrl:6.2f}) | "
+                  f"COM_Y={self.FIXED_COM_OFFSET_Y:.3f} bag_mass={self.bag_mass:.1f}kg")
         except Exception as e:
             print(f"Debug print error: {e}")
 
@@ -125,6 +166,10 @@ class UpdateSimThread(QThread):
     def reset(self):
         self.real_time_start = time.monotonic_ns()
         self.last_robot_update = time.monotonic_ns()
+        # 恢复模型默认质心位置，然后我们会通过 _apply_com_offset 写入固定偏移
+        self.model.body_ipos[self.chassis_body_id] = self.default_chassis_ipos.copy()
+        self.bag_mass = self.default_bag_mass
+        self.robot.update_bag_mass(self.bag_mass)   # 通知控制器更新质量
         self.robot.reset()
         self.last_print_time = 0.0
         self.speed_cmd = 0
@@ -132,12 +177,20 @@ class UpdateSimThread(QThread):
         self.yaw_cmd = 0
         self.yaw_ref = 0
 
-    def set_speed(self, s): self.speed_cmd = s
-    def set_yaw(self, y): self.yaw_cmd = y
+    def set_speed(self, s):
+        self.speed_cmd = s
+
+    def set_yaw(self, y):
+        self.yaw_cmd = y
+
+    def set_bag_mass(self, mass):
+        """由滑块调用，更新球包质量"""
+        self.bag_mass = mass
+        self.robot.update_bag_mass(mass)
 
     def update_speed_ref(self):
         ACC = 0.8
-        STEP = ACC * 0.005
+        STEP = ACC * 0.015
         error = self.speed_cmd - self.speed_ref
         if error > STEP:
             error = STEP
@@ -147,7 +200,7 @@ class UpdateSimThread(QThread):
 
     def update_yaw_ref(self):
         ACC = 0.698
-        STEP = ACC * 0.005
+        STEP = ACC * 0.015
         error = np.arctan2(
             np.sin(self.yaw_cmd - self.yaw_ref),
             np.cos(self.yaw_cmd - self.yaw_ref)
@@ -158,6 +211,7 @@ class UpdateSimThread(QThread):
             error = -STEP
         self.yaw_ref += error
 
+
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -166,7 +220,7 @@ class Window(QMainWindow):
         self.data = mujoco.MjData(self.model)
         self.cam = mujoco.MjvCamera()
         self.cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-        self.cam.lookat = np.array([0,0,0])
+        self.cam.lookat = np.array([0, 0, 0])
         self.cam.distance = self.model.stat.extent * 15
         self.cam.elevation = -25
         self.cam.azimuth = 45
@@ -184,34 +238,63 @@ class Window(QMainWindow):
         reset_btn.clicked.connect(self.reset_sim)
         top.addWidget(reset_btn)
         ctrl_layout = QVBoxLayout()
+
+        # ---------- 速度滑块 ----------
         speed_layout = QHBoxLayout()
         self.speed_slider = QSlider(Qt.Horizontal)
-        self.speed_slider.setMinimum(-15/3.6 * 1000)
-        self.speed_slider.setMaximum(15/3.6 * 1000)
+        self.speed_slider.setMinimum(-15 / 3.6 * 1000)
+        self.speed_slider.setMaximum(15 / 3.6 * 1000)
         self.speed_slider.setValue(0)
-        self.speed_slider.valueChanged.connect(lambda v: self.th.set_speed(v/1000))
+        self.speed_slider.valueChanged.connect(lambda v: self.th.set_speed(v / 1000))
         speed_layout.addWidget(QLabel("Speed"))
         speed_layout.addWidget(self.speed_slider)
+
+        # ---------- 偏航滑块 ----------
         yaw_layout = QHBoxLayout()
         self.yaw_slider = QSlider(Qt.Horizontal)
-        self.yaw_slider.setMinimum(-np.deg2rad(180)*1000)
-        self.yaw_slider.setMaximum(np.deg2rad(180)*1000)
+        self.yaw_slider.setMinimum(-np.deg2rad(180) * 1000)
+        self.yaw_slider.setMaximum(np.deg2rad(180) * 1000)
         self.yaw_slider.setValue(0)
-        self.yaw_slider.valueChanged.connect(lambda v: self.th.set_yaw(-v/1000))
+        self.yaw_slider.valueChanged.connect(lambda v: self.th.set_yaw(-v / 1000))
         yaw_layout.addWidget(QLabel("Yaw"))
         yaw_layout.addWidget(self.yaw_slider)
+
+        # ---------- 球包质量滑块（替代原来的 COM Y 滑块） ----------
+        bag_mass_layout = QHBoxLayout()
+        self.bag_mass_slider = QSlider(Qt.Horizontal)
+        self.bag_mass_slider.setMinimum(0)
+        self.bag_mass_slider.setMaximum(1000)
+        # 默认值对应 8.9 kg
+        self.bag_mass_slider.setValue(1000)
+        self.bag_mass_slider.valueChanged.connect(self.on_bag_mass_changed)
+        self.bag_mass_label = QLabel("Bag Mass: 8.9 kg")
+        bag_mass_layout.addWidget(self.bag_mass_label)
+        bag_mass_layout.addWidget(self.bag_mass_slider)
+
         ctrl_layout.addLayout(speed_layout)
         ctrl_layout.addLayout(yaw_layout)
+        ctrl_layout.addLayout(bag_mass_layout)
+
         top.addLayout(ctrl_layout)
-        top.setContentsMargins(8,0,8,0)
+        top.setContentsMargins(8, 0, 8, 0)
         layout.addLayout(top)
         layout.addWidget(QWidget.createWindowContainer(self.viewport))
-        layout.setContentsMargins(0,4,0,0)
-        w = QWidget(); w.setLayout(layout); self.setCentralWidget(w)
-        self.resize(1650,850)
+        layout.setContentsMargins(0, 4, 0, 0)
+        w = QWidget()
+        w.setLayout(layout)
+        self.setCentralWidget(w)
+        self.resize(1650, 850)
         self.move(1950, 20)
+
         self.th = UpdateSimThread(self.model, self.data, self)
+        self.th.set_bag_mass(8.9)   # 同步初始质量
         self.th.start()
+
+    def on_bag_mass_changed(self, val):
+        # 滑块 0~1000 → 3.1~8.9 kg
+        mass = 3.1 + (8.9 - 3.1) * (val / 1000.0)
+        self.bag_mass_label.setText(f"Bag Mass: {mass:.1f} kg")
+        self.th.set_bag_mass(mass)
 
     @Slot(float)
     def show_runtime(self, fps):
@@ -220,9 +303,12 @@ class Window(QMainWindow):
     def reset_sim(self):
         self.speed_slider.setValue(0)
         self.yaw_slider.setValue(0)
+        self.bag_mass_slider.setValue(1000)
+        self.bag_mass_label.setText("Bag Mass: 8.9 kg")
         mujoco.mj_resetData(self.model, self.data)
         mujoco.mj_forward(self.model, self.data)
         self.th.reset()
+
 
 if __name__ == "__main__":
     app = QApplication()

@@ -4,8 +4,8 @@ import mujoco
 import numpy as np
 import pathlib
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QMainWindow, QPushButton, QSizePolicy,
-    QVBoxLayout, QGroupBox, QHBoxLayout, QSlider, QLabel
+    QApplication, QWidget, QMainWindow, QPushButton,
+    QVBoxLayout, QHBoxLayout, QSlider, QLabel
 )
 from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtOpenGL import QOpenGLWindow
@@ -73,7 +73,6 @@ class UpdateSimThread(QThread):
         self.model, self.data = model, data
         self.running = True
         self.robot = SegwayPID(model, data)
-        self.speed, self.yaw = 0.0, 0.0
         self.speed_cmd = 0.0  # UI给的
         self.speed_ref = 0.0  # 真正送PID
         self.yaw_cmd = 0.0
@@ -81,6 +80,12 @@ class UpdateSimThread(QThread):
         self.body_id = model.body('segway').id
         self.l_dof = model.jnt_dofadr[model.joint('torso_l_wheel').id]
         self.r_dof = model.jnt_dofadr[model.joint('torso_r_wheel').id]
+
+        # 底盘质心偏移 (Y轴), 默认0.0
+        self.com_offset_y = 0.0
+        self.chassis_body_id = model.body('chassis').id
+        self.default_chassis_ipos = model.body_ipos[self.chassis_body_id].copy()
+
         self.reset()
         self.last_print_time = 0.0
 
@@ -95,7 +100,9 @@ class UpdateSimThread(QThread):
                     # 更新参考值
                     self.update_speed_ref()
                     self.update_yaw_ref()
-                    # 再送给PID
+                    # 应用质心偏移
+                    self._apply_com_offset()
+                    # 送给PID控制器
                     self.robot.set_velocity_linear_set_point(self.speed_ref)
                     self.robot.set_yaw(self.yaw_ref)
                     self.robot.update_motor_torque()
@@ -105,6 +112,12 @@ class UpdateSimThread(QThread):
                     self._print_debug_info()
             else:
                 time.sleep(0.00001)
+
+    def _apply_com_offset(self):
+        """将存储的 com_offset_y 写入 MuJoCo 模型的底盘惯性位置"""
+        ipos = self.model.body_ipos[self.chassis_body_id].copy()
+        ipos[1] = self.com_offset_y   # Y 分量
+        self.model.body_ipos[self.chassis_body_id] = ipos
 
     def _print_debug_info(self):
         try:
@@ -117,7 +130,8 @@ class UpdateSimThread(QThread):
             l_ctrl, r_ctrl = self.data.ctrl[0], self.data.ctrl[1]
             print(f"[t={self.data.time:.2f}s] pitch={pitch:6.2f}° roll={roll:6.2f}° yaw={yaw:6.2f}° | "
                   f"actual_speed={actual_speed:6.3f} m/s | target_speed={self.speed_ref:5.2f} m/s | "
-                  f"L_vel={l_vel:6.2f} R_vel={r_vel:6.2f} | ctrl=({l_ctrl:6.2f},{r_ctrl:6.2f})")
+                  f"L_vel={l_vel:6.2f} R_vel={r_vel:6.2f} | ctrl=({l_ctrl:6.2f},{r_ctrl:6.2f}) | "
+                  f"COM_Y={self.com_offset_y:.3f}")
         except Exception as e:
             print(f"Debug print error: {e}")
 
@@ -128,6 +142,9 @@ class UpdateSimThread(QThread):
     def reset(self):
         self.real_time_start = time.monotonic_ns()
         self.last_robot_update = time.monotonic_ns()
+        # 恢复默认质心位置
+        self.com_offset_y = 0.0
+        self.model.body_ipos[self.chassis_body_id] = self.default_chassis_ipos.copy()
         self.robot.reset()
         self.last_print_time = 0.0
         self.speed_cmd = 0
@@ -138,9 +155,13 @@ class UpdateSimThread(QThread):
     def set_speed(self, s): self.speed_cmd = s
     def set_yaw(self, y): self.yaw_cmd = y
 
+    def set_com_offset(self, y_value):
+        """设置底盘质心 Y 偏移，范围约 -0.1 到 0.0"""
+        self.com_offset_y = y_value
+
     def update_speed_ref(self):
         ACC = 0.8  # 最大加速度
-        STEP = ACC * 0.005
+        STEP = ACC * 0.015
         error = self.speed_cmd - self.speed_ref
         if error > STEP:
             error = STEP
@@ -149,8 +170,8 @@ class UpdateSimThread(QThread):
         self.speed_ref += error
 
     def update_yaw_ref(self):
-        ACC = 0.698  # 最大加速度
-        STEP = ACC * 0.005
+        ACC = 0.698
+        STEP = ACC * 0.015
         error = np.arctan2(
             np.sin(self.yaw_cmd - self.yaw_ref),
             np.cos(self.yaw_cmd - self.yaw_ref)
@@ -164,7 +185,7 @@ class UpdateSimThread(QThread):
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
-        xml_path = pathlib.Path(__file__).parent.joinpath('xml\scene.xml')
+        xml_path = pathlib.Path(__file__).parent.joinpath('xml/scene.xml')
         self.model = mujoco.MjModel.from_xml_path(str(xml_path))
         self.data = mujoco.MjData(self.model)
         self.cam = mujoco.MjvCamera()
@@ -187,6 +208,7 @@ class Window(QMainWindow):
         reset_btn.clicked.connect(self.reset_sim)
         top.addWidget(reset_btn)
         ctrl_layout = QVBoxLayout()
+
         # speed slider
         speed_layout = QHBoxLayout()
         self.speed_slider = QSlider(Qt.Horizontal)
@@ -196,6 +218,7 @@ class Window(QMainWindow):
         self.speed_slider.valueChanged.connect(lambda v: self.th.set_speed(v/1000))
         speed_layout.addWidget(QLabel("Speed"))
         speed_layout.addWidget(self.speed_slider)
+
         # yaw slider
         yaw_layout = QHBoxLayout()
         self.yaw_slider = QSlider(Qt.Horizontal)
@@ -205,8 +228,20 @@ class Window(QMainWindow):
         self.yaw_slider.valueChanged.connect(lambda v: self.th.set_yaw(-v/1000))
         yaw_layout.addWidget(QLabel("Yaw"))
         yaw_layout.addWidget(self.yaw_slider)
+
+        # COM Y offset slider
+        com_layout = QHBoxLayout()
+        self.com_slider = QSlider(Qt.Horizontal)
+        self.com_slider.setMinimum(0)
+        self.com_slider.setMaximum(1000)
+        self.com_slider.setValue(0)
+        self.com_slider.valueChanged.connect(self.on_com_slider_changed)
+        com_layout.addWidget(QLabel("COM Y offset"))
+        com_layout.addWidget(self.com_slider)
+
         ctrl_layout.addLayout(speed_layout)
         ctrl_layout.addLayout(yaw_layout)
+        ctrl_layout.addLayout(com_layout)
         top.addLayout(ctrl_layout)
         top.setContentsMargins(8,0,8,0)
         layout.addLayout(top)
@@ -218,6 +253,11 @@ class Window(QMainWindow):
         self.th = UpdateSimThread(self.model, self.data, self)
         self.th.start()
 
+    def on_com_slider_changed(self, val):
+        # val: 0~1000 -> y: 0.0 ~ -0.1
+        y = -val / 10000.0
+        self.th.set_com_offset(y)
+
     @Slot(float)
     def show_runtime(self, fps):
         self.statusBar().showMessage(f"Avg runtime: {fps:.0e}s  Sim time: {self.data.time:.0f}s")
@@ -225,6 +265,7 @@ class Window(QMainWindow):
     def reset_sim(self):
         self.speed_slider.setValue(0)
         self.yaw_slider.setValue(0)
+        self.com_slider.setValue(0)
         mujoco.mj_resetData(self.model, self.data)
         mujoco.mj_forward(self.model, self.data)
         self.th.reset()
