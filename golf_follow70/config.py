@@ -24,7 +24,10 @@ G = dict(KP=(0.30, 0.9095), KI=(0.03, 0.2184), KD=0.0411, FF=1.0,
 
 
 def equilibrium_pitch_deg(model):
-    """解析摆体(chassis/handlebar/bag_mount/golf_bag)合成质心相对轮轴的平衡俯仰角(°)"""
+    """解析摆体(chassis/handlebar/bag_mount/golf_bag)合成质心相对轮轴的平衡俯仰角(°)。
+    投影到车体本体『侧向(Y)-竖直(Z)』平面，消除偏航依赖：在 launch_passive 已烘焙的
+    yaw=±90° 初始姿态下也能算出与 yaw=0 一致的正确平衡角；旧公式只取 world Y-Z 平面，
+    在偏航姿态下返回 0 → 平衡锚被清零 → 车翻倒跟丢。"""
     d = mujoco.MjData(model); mujoco.mj_forward(model, d)
     M, com = 0.0, np.zeros(3)
     for nm in ('chassis', 'handlebar', 'bag_mount', 'golf_bag'):
@@ -32,7 +35,12 @@ def equilibrium_pitch_deg(model):
         com += m * d.xipos[b]; M += m
     com /= M
     axle = 0.5 * (d.xpos[model.body('l_wheel').id] + d.xpos[model.body('r_wheel').id])
-    return float(np.degrees(np.arctan2(com[1] - axle[1], com[2] - axle[2])))
+    seg = model.body('segway').id
+    R = d.xmat[seg].reshape(3, 3)
+    off = com - axle
+    yc = float(np.dot(off, R[:, 1]))   # 车体侧向分量
+    zc = float(np.dot(off, R[:, 2]))   # 车体竖直分量
+    return float(np.degrees(np.arctan2(yc, zc)))
 
 
 def _sched(bag_kg, light, heavy, lo=1.5, hi=10.0):

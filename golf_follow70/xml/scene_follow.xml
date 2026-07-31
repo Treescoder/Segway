@@ -1,7 +1,6 @@
 <mujoco model="golf follow scene">
     <compiler angle="radian"/>
     <size njmax="500" nconmax="100"/>
-    <!-- timestep=0.001：行人被动关节(小armature)在默认2ms步长下会数值发散，需1ms -->
     <option gravity="0 0 -9.81" viscosity="0.002" timestep="0.001"/>
 
     <default>
@@ -11,7 +10,8 @@
 
     <!-- ========== 引入模型模块 ========== -->
     <include file="human.xml"/>
-    <include file="golf10_barfh.xml"/>
+<!--    <include file="golf10_barfh.xml"/>-->
+    <include file="golf10_barfh_MJW.xml"/>
 
     <!-- ========== 统计 & 视觉 ========== -->
     <statistic center="0 0 0.3" extent="0.3"/>
