@@ -32,7 +32,7 @@ class HumanController:
     SPRINT_DURATION = 9.0
     SPRINT_INTERVAL = 22.0
 
-    def __init__(self, model, data, start_x=0.0, start_y=-2.5):
+    def __init__(self, model, data, start_x=0.0, start_y=-1.90):
         self.model = model
         self.data = data
 
@@ -74,7 +74,7 @@ class HumanController:
 
         self._update_mocap()
 
-    def reset(self, x=0.0, y=-2.5, yaw=0.0):
+    def reset(self, x=0.0, y=-1.90, yaw=0.0):
         self.x = x
         self.y = y
         self.yaw = yaw

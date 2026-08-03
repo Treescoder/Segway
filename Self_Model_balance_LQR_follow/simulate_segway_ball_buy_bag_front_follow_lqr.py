@@ -3,9 +3,9 @@
 
 功能：
   - MuJoCo 物理仿真 + PySide6 OpenGL 渲染
-  - LQR 平衡控制（内环倾角 + 外环速度 PI + 偏航 PD）
+  - LQI 平衡/速度一体化控制 + 偏航 PD
   - 人类随机行走（mocap 体，随机速度/转弯，有限加速度）
-  - 跟踪控制（目标 2.5m，速度/yaw 前馈）
+  - 跟踪控制（目标 1.90m，速度/yaw 前馈）
   - 手动/跟踪模式切换
   - 跌倒检测
   - 球包质量动态调节
@@ -26,15 +26,23 @@ from collections import deque
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QMainWindow, QPushButton,
-    QVBoxLayout, QHBoxLayout, QSlider, QLabel, QCheckBox
+    QVBoxLayout, QHBoxLayout, QSlider, QLabel
 )
 from PySide6.QtCore import QTimer, Qt, Signal, Slot, QThread
 from PySide6.QtOpenGL import QOpenGLWindow
-from PySide6.QtGui import QGuiApplication, QSurfaceFormat, QShortcut, QKeySequence
+from PySide6.QtGui import QSurfaceFormat, QShortcut, QKeySequence
 
-from segway_ball_lqr_bag_front_follow import SegwayLQR
-from human_controller import HumanController
-from tracking_controller import TrackingController
+try:
+    from .segway_ball_lqr_bag_front_follow import SegwayLQR
+    from .human_controller import HumanController
+    from .tracking_controller import TrackingController
+except ImportError:  # 允许在 PyCharm 中直接运行当前文件
+    from segway_ball_lqr_bag_front_follow import SegwayLQR
+    from human_controller import HumanController
+    from tracking_controller import TrackingController
+
+
+CONTROL_DT = 0.005  # 200 Hz；嵌入式版本也应使用固定控制周期
 
 # ============ OpenGL 格式 ============
 fmt = QSurfaceFormat()
@@ -121,10 +129,10 @@ class UpdateSimThread(QThread):
         self.running = True
         mujoco.mj_forward(model, data)
 
-        # LQR 直接读取 XML 质心；球包质量改变时会自动重算平衡点。
+        # 固定LQR增益 + IMU/力矩扰动观测器；控制器不读球包质量。
         self.robot = SegwayLQR(model, data)
-        self.human = HumanController(model, data, start_x=0.0, start_y=-2.5)
-        self.tracker = TrackingController(desired_distance=2.5)
+        self.human = HumanController(model, data, start_x=0.0, start_y=-1.90)
+        self.tracker = TrackingController()
 
         # 模式
         self.tracking_mode = False
@@ -136,7 +144,7 @@ class UpdateSimThread(QThread):
         self.yaw_cmd = 0.0
         self.yaw_ref = 0.0
 
-        # 球包质量
+        # 球包质量只是MuJoCo仿真工况，不传入控制算法。
         self.default_bag_mass = 9.0
         self.bag_mass = self.default_bag_mass
         self.target_bag_mass = self.default_bag_mass
@@ -162,11 +170,11 @@ class UpdateSimThread(QThread):
                 # 控制周期必须绑定 MuJoCo 仿真时间。旧版用墙钟计时，界面一慢
                 # 就丢控制周期，导致显示2.78m/s的人实际只移动约0.9m/s。
                 if self.data.time + 1e-12 >= self.next_control_time:
-                    self.next_control_time += 0.005
+                    self.next_control_time += CONTROL_DT
 
                     if self.tracking_mode:
                         # 更新人类运动
-                        self.human.update(0.005)
+                        self.human.update(CONTROL_DT)
                         # 仿真适配层：实车中 distance/bearing_error 必须来自传感器。
                         h = self.human.get_state()
                         cart_pos = self.robot.get_position()
@@ -181,9 +189,14 @@ class UpdateSimThread(QThread):
                         target_speed, target_yaw, dist = self.tracker.update(
                             distance, bearing_error,
                             h['speed'], h['yaw'],
-                            self.robot.get_speed(), cart_yaw, 0.005)
-                        self.speed_cmd = target_speed
-                        self.yaw_cmd = target_yaw
+                            self.robot.get_speed(), cart_yaw, CONTROL_DT,
+                            target_valid=(
+                                abs(bearing_error)
+                                <= self.tracker.CAMERA_HALF_FOV
+                            ))
+                        # 跟踪器已经完成速度/yaw斜坡，避免主程序重复限速。
+                        self.speed_cmd = self.speed_ref = target_speed
+                        self.yaw_cmd = self.yaw_ref = target_yaw
                         self.current_distance = dist
                         self.human_speed = h['speed']
                         self.camera_visible = self.tracker.person_visible
@@ -193,9 +206,10 @@ class UpdateSimThread(QThread):
                         self.current_distance = 0.0
                         self.human_speed = 0.0
 
-                    # 平滑速度和偏航
-                    self.update_speed_ref()
-                    self.update_yaw_ref()
+                    # 手动模式仍由主程序平滑；跟踪模式由可移植跟踪器完成。
+                    if not self.tracking_mode:
+                        self.update_speed_ref()
+                        self.update_yaw_ref()
                     self.update_bag_mass()
 
                     # 跌倒检测
@@ -205,10 +219,10 @@ class UpdateSimThread(QThread):
                     if not self.fallen:
                         self.robot.set_velocity(self.speed_ref)
                         self.robot.set_yaw(self.yaw_ref)
-                        self.robot.update()
+                        self.robot.update(CONTROL_DT)
                     else:
-                        self.data.ctrl[0] = 0.0
-                        self.data.ctrl[1] = 0.0
+                        self.data.actuator('motor_l_wheel').ctrl = [0.0]
+                        self.data.actuator('motor_r_wheel').ctrl = [0.0]
 
                 mujoco.mj_step(self.model, self.data)
 
@@ -222,8 +236,10 @@ class UpdateSimThread(QThread):
                 time.sleep(0.00001)
 
     def _check_fallen(self):
-        """相对当前质量的平衡角判断跌倒，并同时检查横滚。"""
-        pitch = self.robot._get_pitch()
+        """相对在线估计平衡角判断跌倒，并同时检查横滚。"""
+        if self.fallen:
+            return
+        pitch = self.robot.get_pitch()
         pitch_error = np.arctan2(
             np.sin(pitch - self.robot.theta_eq),
             np.cos(pitch - self.robot.theta_eq))
@@ -234,18 +250,18 @@ class UpdateSimThread(QThread):
                 print(f"[WARNING] 球车跌倒! pitch={np.rad2deg(pitch):.1f} deg, "
                       f"eq={np.rad2deg(self.robot.theta_eq):.1f} deg, "
                       f"roll={np.rad2deg(roll):.1f} deg")
-        else:
-            self.fallen = False
 
     def _print_debug_info(self):
-        pitch_deg = np.rad2deg(self.robot._get_pitch())
+        pitch_deg = np.rad2deg(self.robot.get_pitch())
         yaw_deg = np.rad2deg(self.robot.get_yaw())
         cart_pos = self.robot.get_position()
         h = self.human.get_state()
 
         if self.tracking_mode:
             print(f"[t={self.data.time:.1f}s] TRACKING | "
-                  f"pitch={pitch_deg:6.1f} yaw={yaw_deg:6.1f} | "
+                  f"pitch={pitch_deg:6.1f} "
+                  f"eq_hat={np.rad2deg(self.robot.theta_eq):5.1f} "
+                  f"yaw={yaw_deg:6.1f} | "
                   f"cart=({cart_pos[0]:5.1f},{cart_pos[1]:5.1f}) v={self.cart_speed:.2f} | "
                   f"human=({h['x']:5.1f},{h['y']:5.1f}) v={h['speed']:.2f} | "
                   f"dist={self.current_distance:.2f}m | "
@@ -254,7 +270,9 @@ class UpdateSimThread(QThread):
                   f"{' FALLEN!' if self.fallen else ''}")
         else:
             print(f"[t={self.data.time:.1f}s] MANUAL | "
-                  f"pitch={pitch_deg:6.1f} yaw={yaw_deg:6.1f} | "
+                  f"pitch={pitch_deg:6.1f} "
+                  f"eq_hat={np.rad2deg(self.robot.theta_eq):5.1f} "
+                  f"yaw={yaw_deg:6.1f} | "
                   f"v={self.cart_speed:.2f} target={self.speed_ref:.2f}"
                   f"{' FALLEN!' if self.fallen else ''}")
 
@@ -269,16 +287,16 @@ class UpdateSimThread(QThread):
         # 球包质量
         self.bag_mass = self.default_bag_mass
         self.target_bag_mass = self.default_bag_mass
-        self.robot.update_bag_mass(self.bag_mass)
+        self.robot.set_simulated_bag_mass(self.bag_mass)
 
-        # 重置 LQR（内部调用 mj_resetData + mj_forward）
+        # 重置LQR及未知平衡角观测器。
         self.robot.reset()
 
         # 重置人类
         self.human.reset()
 
         # 重置跟踪控制器
-        self.tracker.reset()
+        self.tracker.reset(0.0, self.robot.get_yaw())
 
         # 重置状态
         self.fallen = False
@@ -303,19 +321,21 @@ class UpdateSimThread(QThread):
 
     def update_bag_mass(self):
         """在仿真线程内渐变质量，避免跨线程改模型和瞬时质心阶跃。"""
-        max_step = self.bag_mass_rate * 0.005
+        max_step = self.bag_mass_rate * CONTROL_DT
         delta = np.clip(
             self.target_bag_mass - self.bag_mass, -max_step, max_step)
         if abs(delta) > 1e-9:
             self.bag_mass += delta
-            self.robot.update_bag_mass(self.bag_mass)
+            self.robot.set_simulated_bag_mass(self.bag_mass)
 
     def set_tracking(self, enabled):
         self.tracking_mode = enabled
         if enabled:
-            self.tracker.reset()
-            # 跟踪启动即跳到标称跟随速度，避免从 0 起步被行走的人甩开（距离冲过 3m）
-            self.speed_ref = 0.0
+            self.tracker.reset(
+                self.robot.get_speed(), self.robot.get_yaw()
+            )
+            self.speed_ref = self.tracker.speed_ref
+            self.yaw_ref = self.tracker.yaw_ref
             print("=== 跟踪模式启动 ===")
         else:
             self.speed_cmd = 0.0
@@ -325,7 +345,9 @@ class UpdateSimThread(QThread):
     def reset_human(self):
         """仅重置人类位置"""
         self.human.reset()
-        self.tracker.reset()
+        self.tracker.reset(
+            self.robot.get_speed(), self.robot.get_yaw()
+        )
         print("=== 人类位置已重置 ===")
 
     def update_speed_ref(self):
@@ -334,7 +356,7 @@ class UpdateSimThread(QThread):
             rate = 0.60
         else:
             rate = 0.85
-        STEP = rate * 0.005
+        STEP = rate * CONTROL_DT
         error = self.speed_cmd - self.speed_ref
         if error > STEP:
             error = STEP
@@ -344,7 +366,7 @@ class UpdateSimThread(QThread):
 
     def update_yaw_ref(self):
         ACC = 3.0  # rad/s
-        STEP = ACC * 0.005
+        STEP = ACC * CONTROL_DT
         error = np.arctan2(
             np.sin(self.yaw_cmd - self.yaw_ref),
             np.cos(self.yaw_cmd - self.yaw_ref))
@@ -440,7 +462,7 @@ class Window(QMainWindow):
         self.bag_mass_slider.setSingleStep(10)
         self.bag_mass_slider.setValue(900)
         self.bag_mass_slider.valueChanged.connect(self.on_bag_mass_changed)
-        self.bag_mass_label = QLabel("Bag: 9.0 kg")
+        self.bag_mass_label = QLabel("Sim Bag: 9.0 kg")
         self.bag_mass_label.setMinimumWidth(70)
         bag_mass_layout.addWidget(self.bag_mass_label)
         bag_mass_layout.addWidget(self.bag_mass_slider)
@@ -488,7 +510,7 @@ class Window(QMainWindow):
 
     def on_bag_mass_changed(self, val):
         mass = val / 100.0
-        self.bag_mass_label.setText(f"Bag: {mass:.1f} kg")
+        self.bag_mass_label.setText(f"Sim Bag: {mass:.1f} kg")
         self.th.set_bag_mass(mass)
 
     def reset_human(self):
@@ -526,7 +548,7 @@ class Window(QMainWindow):
         self.speed_slider.setValue(0)
         self.yaw_slider.setValue(0)
         self.bag_mass_slider.setValue(900)
-        self.bag_mass_label.setText("Bag: 9.0 kg")
+        self.bag_mass_label.setText("Sim Bag: 9.0 kg")
         self.tracking_btn.setChecked(False)
         mujoco.mj_resetData(self.model, self.data)
         mujoco.mj_forward(self.model, self.data)
